@@ -15,22 +15,22 @@ jobs:
       - name: Checkout xccapk
         uses: actions/checkout@v4
 
-      - name: Sync all files from qist/tvbox
+      - name: Sync qist/tvbox into tv/
         run: |
           rm -rf /tmp/src
           git clone --depth 1 https://github.com/qist/tvbox.git /tmp/src
           rm -rf /tmp/src/.git
-          # 全量同步（保留 .github）
-          rsync -av --delete --exclude='.github' --exclude='.git' /tmp/src/ ./
-          # dianshi.json 复制到 tv/vod.json
+          # 全量同步到 tv/ 目录
           mkdir -p tv
-          if [ -f dianshi.json ]; then cp dianshi.json tv/vod.json; fi
-          ls -la tv/
+          rsync -av --delete --exclude='.github' --exclude='.git' /tmp/src/ tv/
+          # dianshi.json 改名 vod.json
+          if [ -f tv/dianshi.json ]; then cp tv/dianshi.json tv/vod.json; fi
+          ls -la tv/ | head
 
       - name: Commit & push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --staged --quiet && echo "无更新" || git commit -m "chore: 全量同步 qist/tvbox"
+          git diff --staged --quiet && echo "无更新" || git commit -m "chore: 全量同步 qist/tvbox 到 tv/"
           git push
