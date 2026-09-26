@@ -24,7 +24,7 @@ jobs:
           mkdir -p tv
           rsync -av --delete --exclude='.github' --exclude='.git' /tmp/src/ tv/
           # dianshi.json 改名 vod.json
-          if [ -f tv/dianshi.json ]; then cp tv/dianshi.json tv/vod.json; fi
+          if [ -f tv/dianshi.json ]; then mv tv/dianshi.json tv/vod.json; fi
           ls -la tv/ | head
 
       - name: Commit & push
