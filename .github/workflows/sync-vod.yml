@@ -21,7 +21,7 @@ jobs:
           git clone --depth 1 https://github.com/qist/tvbox.git /tmp/src
           rm -rf /tmp/src/.git
           # 全量同步（保留 .github）
-          rsync -av --delete --exclude='.github' /tmp/src/ ./
+          rsync -av --delete --exclude='.github' --exclude='.git' /tmp/src/ ./
           # dianshi.json 复制到 tv/vod.json
           mkdir -p tv
           if [ -f dianshi.json ]; then cp dianshi.json tv/vod.json; fi
