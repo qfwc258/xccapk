@@ -19,14 +19,13 @@ jobs:
         run: |
           rm -rf /tmp/src
           git clone --depth 1 https://github.com/qist/tvbox.git /tmp/src
-          # 删除 .git，其余全量复制到当前仓根目录
           rm -rf /tmp/src/.git
-          # 同步所有文件（删除本地多余文件）
+          # 全量同步（保留 .github）
           rsync -av --delete --exclude='.github' /tmp/src/ ./
-          # dianshi.json 改名为 vod.json
-          if [ -f dianshi.json ]; then mv dianshi.json tv/vod.json; fi
-          if [ -f /tmp/src/dianshi.json ]; then cp /tmp/src/dianshi.json tv/vod.json; fi
-          ls -la
+          # dianshi.json 复制到 tv/vod.json
+          mkdir -p tv
+          if [ -f dianshi.json ]; then cp dianshi.json tv/vod.json; fi
+          ls -la tv/
 
       - name: Commit & push
         run: |
