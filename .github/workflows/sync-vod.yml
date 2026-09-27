@@ -22,7 +22,7 @@ jobs:
           rm -rf /tmp/src/.git
           # 全量同步到 tv/ 目录
           mkdir -p tv
-          rsync -av --delete --exclude='.github' --exclude='.git' /tmp/src/ tv/
+          rsync -av --delete --exclude='.github' --exclude='.git' --exclude='live.json' /tmp/src/ tv/
           # dianshi.json 改名 vod.json
           if [ -f tv/dianshi.json ]; then mv tv/dianshi.json tv/vod.json; fi
           ls -la tv/ | head
