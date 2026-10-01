@@ -1,0 +1,43 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master, xcctv-tvhelper-src]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant gradlew exec
+        run: chmod +x ./gradlew
+
+      - name: Assemble Release
+        run: |
+          STK="${{ secrets.RELEASE_STORE_PASSWORD || 'xcctv2026' }}"
+          KAL="${{ secrets.RELEASE_KEY_ALIAS || 'xcctv' }}"
+          KPW="${{ secrets.RELEASE_KEY_PASSWORD || 'xcctv2026' }}"
+          ./gradlew assembleRelease \
+            -PRELEASE_STORE_FILE=signing/release.keystore \
+            -PRELEASE_STORE_PASSWORD="$STK" \
+            -PRELEASE_KEY_ALIAS="$KAL" \
+            -PRELEASE_KEY_PASSWORD="$KPW"
+
+      - name: List outputs
+        run: find app/build/outputs -name '*.apk' -type f -ls
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: XCCTV-TVHelper-release
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30

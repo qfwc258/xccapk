@@ -1,0 +1,73 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace "com.xcctv.tvhelper"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.xcctv.tvhelper"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    // ---------- 签名配置：从 gradle.properties / -P 参数 / 环境变量 读取，无则走默认 ----------
+    // Gradle 会把 gradle.properties 里的自定义 key 注入到 project properties
+    def gProp = { key, fallback ->
+        def v = project.findProperty(key) ?: fallback
+        return v instanceof String ? v.trim() : v
+    }
+    signingConfigs {
+        release {
+            storeFile       rootProject.file(gProp('RELEASE_STORE_FILE', 'signing/release.keystore'))
+            storePassword   gProp('RELEASE_STORE_PASSWORD', 'xcctv2026')
+            keyAlias        gProp('RELEASE_KEY_ALIAS', 'xcctv')
+            keyPassword     gProp('RELEASE_KEY_PASSWORD', 'xcctv2026')
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // debug 构建始终使用 debug 签名
+            signingConfig signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    // 输出 APK 按 "app-v版本号-release.apk" 重命名，方便下载
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            if (output.outputFileName) {
+                output.outputFileName = "XCCTV-TVHelper-${variant.versionName}-${variant.buildType.name}.apk"
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+
+    // OkHttp：网络请求 + MockWebServer 轻量本地 HTTP 服务（替换原 Ktor，零额外架构开销）
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // 协程
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+}
