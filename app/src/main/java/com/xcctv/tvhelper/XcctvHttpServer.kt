@@ -1,11 +1,6 @@
 package com.xcctv.tvhelper
 
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.mockwebserver.Dispatcher
-import okhttp3.mockwebserver.MockResponse
-import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.RecordedRequest
-import okio.Buffer
+import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.net.URLConnection
 
@@ -13,42 +8,50 @@ import java.net.URLConnection
  * 本地 HTTP 文件服务器：监听 127.0.0.1:7890
  * 路由：GET /xcctv/{relPath} → 返回 rootDir/{relPath}
  *
- * 用 OkHttp MockWebServer 实现（项目已依赖 OkHttp，零额外架构）。
+ * 使用 NanoHTTPD（纯 Java，Android 兼容）
  */
-class XcctvHttpServer(private val rootDir: File) {
+class XcctvHttpServer(private val rootDir: File, port: Int = 7890) :
+    NanoHTTPD("127.0.0.1", port) {
 
-    private var server: MockWebServer? = null
-
-    fun start() {
-        if (server != null) return
-        val srv = MockWebServer()
-        srv.dispatcher = object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse {
-                val path = request.path ?: "/"
-                val rel = path.removePrefix("/xcctv/")
-                if (rel.isEmpty() || rel.endsWith("/")) {
-                    return MockResponse().setResponseCode(404).setBody("目录不支持列出")
-                }
-                val target = File(rootDir, rel)
-                if (!target.exists() || target.isDirectory) {
-                    return MockResponse().setResponseCode(404).setBody("文件不存在: $rel")
-                }
-                val mime = guessMime(target.name)
-                val body = Buffer().write(target.readBytes())
-                return MockResponse()
-                    .setResponseCode(200)
-                    .addHeader("Content-Type", mime)
-                    .addHeader("Content-Length", target.length())
-                    .setBody(body.readUtf8())
-            }
-        }
-        srv.start(7890)
-        server = srv
+    init {
+        // Android 上建议 wAiteForAllThreads=false，避免 shutdown 时阻塞
+        isDaemon = true
+        wAiteForAllThreads = false
     }
 
-    fun stop() {
-        try { server?.shutdown() } catch (_: Exception) {}
-        server = null
+    override fun serve(session: IHTTPSession): Response {
+        val path = session.uri ?: "/"
+        val rel = path.removePrefix("/xcctv/").removePrefix("/xcctv")
+        if (rel.isEmpty() || rel.endsWith("/")) {
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "目录不支持列出")
+        }
+        val target = File(rootDir, rel)
+        // 防止 ../ 穿越
+        if (!target.canonicalPath.startsWith(rootDir.canonicalPath)) {
+            return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "禁止访问")
+        }
+        if (!target.exists() || target.isDirectory) {
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "文件不存在: $rel")
+        }
+        return try {
+            val mime = guessMime(target.name)
+            val bytes = target.readBytes()
+            newFixedLengthResponse(Response.Status.OK, mime, bytes)
+        } catch (e: Exception) {
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "text/plain",
+                "读取失败: ${e.message}"
+            )
+        }
+    }
+
+    override fun start(): Boolean {
+        return try {
+            super.start(SOCKET_READ_TIMEOUT, false) // no daemon=false 在 start 时阻塞；我们用自己的线程管理
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun guessMime(name: String): String {
@@ -64,6 +67,8 @@ class XcctvHttpServer(private val rootDir: File) {
             name.endsWith(".webp", true) -> "image/webp"
             name.endsWith(".ico", true) -> "image/x-icon"
             name.endsWith(".apk", true) -> "application/vnd.android.package-archive"
+            name.endsWith(".m3u8", true) || name.endsWith(".m3u", true) -> "application/vnd.apple.mpegurl"
+            name.endsWith(".ts", true) -> "video/mp2t"
             else -> URLConnection.guessContentTypeFromName(name) ?: "application/octet-stream"
         }
     }
