@@ -3,6 +3,7 @@ package com.xcctv.tvhelper
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.text.method.ScrollingMovementMethod
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -39,20 +40,25 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             applyTvFocusStyle()
         }
 
-        downloader = XcctvSourceDownloader(applicationContext, this)
+        // Bug2 fix: ScrollingMovementMethod 让 TextView 可手动滑动下拉
+        tvStatus.movementMethod = ScrollingMovementMethod()
+
+        downloader = XcctvSourceDownloader(this)
         val deviceTag = if (isTvDevice) "📺 电视端" else "📱 手机端"
-        tvStatus.text = "$deviceTag\n✅就绪\n粘贴源地址 → 开始下载\n下载完成后可在 TVBox/FongMi 中使用"
+        tvStatus.text = "$deviceTag\n✅就绪\n📁 保存目录: ${downloader.rootDir.absolutePath}\n粘贴源地址 → 开始下载"
 
         btnStart.setOnClickListener {
             val url = etUrl.text.toString().trim()
-            if(url.isNotEmpty()){
+            if (url.isNotEmpty()) {
                 lifecycleScope.launch {
+                    btnStart.isEnabled = false
                     val ret = downloader.run(url)
                     ret.onSuccess {
                         tvStatus.append("\n🎉全部下载完成！")
                     }.onFailure { err ->
                         tvStatus.append("\n❌失败:${err.message}")
                     }
+                    btnStart.isEnabled = true
                 }
             }
         }
@@ -60,7 +66,15 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnClear.setOnClickListener {
             downloader.clearCache()
             tvStatus.append("\n🗑️缓存已清空")
+            scrollToBottom()
         }
+    }
+
+    /** Bug2 fix: 滚动到底部的辅助方法 */
+    private fun scrollToBottom() {
+        val layout = tvStatus.layout ?: return
+        val scrollHeight = layout.height - tvStatus.height
+        tvStatus.scrollTo(0, maxOf(0, scrollHeight))
     }
 
     /** 电视端焦点效果放大 + 字号/按钮高度适配 */
@@ -91,12 +105,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     override fun onProgress(current: Int, total: Int, file: String) {
         runOnUiThread {
             tvStatus.append("\n[$current/$total] $file")
+            scrollToBottom()
         }
     }
 
     override fun onLog(msg: String) {
         runOnUiThread {
             tvStatus.append("\n$msg")
+            scrollToBottom()
         }
     }
 }

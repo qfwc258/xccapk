@@ -9,24 +9,30 @@ import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.FileNotFoundException
 
+/**
+ * file://xcctv/xxx 协议的 ContentProvider。
+ * 所有文件从外部存储 /sdcard/xcctv 下读取（与 XcctvSourceDownloader 保持一致）。
+ */
 class XcctvProvider : ContentProvider() {
-    private lateinit var uriMatcher: UriMatcher
-    companion object {
-        const val AUTHORITY = "com.xcctv.tvhelper.provider"
-        const val CODE_FILE = 1
-    }
 
     override fun onCreate(): Boolean {
-        uriMatcher = UriMatcher(UriMatcher.NO_MATCH)
-        uriMatcher.addURI(AUTHORITY, "*", CODE_FILE)
         return true
     }
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
-        val relPath = uri.path?.removePrefix("/") ?: throw FileNotFoundException()
-        val root = context?.filesDir ?: throw FileNotFoundException()
-        val target = File(root, "xcctv/$relPath")
-        if (!target.exists()) throw FileNotFoundException("文件不存在: $relPath")
+        // uri 形如 file://xcctv/jar/spider.jar → relPath = "jar/spider.jar"
+        val relPath = uri.path?.removePrefix("/")?.trimStart('/')
+            ?: throw FileNotFoundException()
+        val root = resolveRootDir()
+        val target = File(root, relPath)
+
+        // 路径穿越防护
+        if (!target.canonicalPath.startsWith(root.canonicalPath)) {
+            throw FileNotFoundException("非法路径: $relPath")
+        }
+        if (!target.exists()) {
+            throw FileNotFoundException("文件不存在: ${target.absolutePath}")
+        }
         return ParcelFileDescriptor.open(target, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
