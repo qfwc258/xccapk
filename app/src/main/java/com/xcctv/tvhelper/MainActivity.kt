@@ -1,3 +1,4 @@
+import android.content.Intent
 package com.xcctv.tvhelper
 
 import android.content.SharedPreferences
@@ -86,7 +87,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             val scale = resources.displayMetrics.density
             fun enlarge(v: View, minHeightDp: Int = 48, textSp: Float = 18f) {
                 (v as? Button)?.textSize = textSp
-                v.minHeight = (minHeightDp * scale).toInt()
+                v.minimumHeight = (minHeightDp * scale).toInt()
                 v.setOnFocusChangeListener { view, has ->
                     view.animate().scaleX(if (has) 1.15f else 1f).scaleY(if (has) 1.15f else 1f).duration = 150
                     view.isActivated = has
