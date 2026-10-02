@@ -5,6 +5,8 @@ data class SourcePreset(val name: String, val url: String)
 object AppConstants {
     const val PREFS_NAME = "xcctv_prefs"
     const val KEY_LAST_URL = "last_source_url"
+    const val KEY_CUSTOM_URL = "custom_source_url"
+    const val KEY_SOURCE_INDEX = "source_preset_index"
     const val KEY_BOOT_LAUNCH = "boot_launch_enabled"
     const val ROOT_DIR = "/sdcard/xcctv"
     const val FALLBACK_DIR_NAME = "xcctv"
@@ -26,4 +28,6 @@ object AppConstants {
         ),
         SourcePreset("自定义", "")
     )
+
+    const val INDEX_CUSTOM = 2
 }

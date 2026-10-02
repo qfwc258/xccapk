@@ -1,5 +1,6 @@
 package com.xcctv.tvhelper
 
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -9,7 +10,10 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.text.method.ScrollingMovementMethod
+import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -28,7 +32,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     companion object {
         private const val REQ_PERM = 1001
-        private const val FOCUS_SCALE = 1.08f
     }
 
     private val isTvDevice: Boolean by lazy {
@@ -42,7 +45,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var prefs: SharedPreferences
     private lateinit var downloader: XcctvSourceDownloader
     private lateinit var etUrl: EditText
-    private lateinit var spSource: Spinner
+    private lateinit var customRow: View
+    private lateinit var btnClear: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvPermStatus: TextView
     private lateinit var tvBanner: TextView
@@ -56,13 +60,24 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var tvSubtitle: TextView
     private lateinit var tvDevice: TextView
 
+    private var spSource: Spinner? = null
+    private var tileVod: TextView? = null
+    private var tileJsm: TextView? = null
+    private var tileCustom: TextView? = null
+
     private val logLines = ArrayDeque<String>()
     private var downloading = false
     private var sourceReady = false
+    private var sourceIndex = 0
+    private var editingCustom = false
+    private var lastMainFocus: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(if (isTvDevice) R.layout.activity_main_tv else R.layout.activity_main)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            window.decorView.defaultFocusHighlightEnabled = false
+        }
 
         prefs = getSharedPreferences(AppConstants.PREFS_NAME, MODE_PRIVATE)
         bindViews()
@@ -71,28 +86,35 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         tvSubtitle.setText(R.string.subtitle)
         tvDevice.setText(if (isTvDevice) R.string.device_tv else R.string.device_phone)
 
-        setupSourceSpinner()
-        refreshPermStatus()
-        if (isTvDevice) setupTvFocusAnim()
+        restoreSourceSelection()
+        if (spSource != null) setupSourceSpinner()
+        setupSourceTiles()
+        applySourceUi()
+        sourceReady = true
 
+        refreshPermStatus()
         tvStatus.movementMethod = ScrollingMovementMethod()
-        progress.visibility = View.GONE
-        tvBanner.visibility = View.GONE
+        progress.isIndeterminate = false
+        showBanner(R.drawable.bg_banner_idle, R.color.text_secondary, getString(R.string.banner_idle))
 
         downloader = XcctvSourceDownloader(this, this, AppConstants.DOWNLOAD_CONCURRENCY)
 
         btnStart.setOnClickListener { startDownload() }
         btnStop.setOnClickListener { stopDownload() }
         btnPerm.setOnClickListener { requestStoragePerm() }
+        btnClear.setOnClickListener { clearCustomUrl() }
         cbBoot.isChecked = prefs.getBoolean(AppConstants.KEY_BOOT_LAUNCH, false)
         cbBoot.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putBoolean(AppConstants.KEY_BOOT_LAUNCH, checked).apply()
         }
+
+        if (isTvDevice) setupTvControls()
     }
 
     private fun bindViews() {
         etUrl = findViewById(R.id.et_url)
-        spSource = findViewById(R.id.sp_source)
+        customRow = findViewById(R.id.custom_row)
+        btnClear = findViewById(R.id.btn_clear)
         tvStatus = findViewById(R.id.tv_status)
         tvPermStatus = findViewById(R.id.tv_perm_status)
         tvSavePath = findViewById(R.id.tv_save_path)
@@ -105,50 +127,104 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         tvSubtitle = findViewById(R.id.tv_subtitle)
         tvDevice = findViewById(R.id.tv_device)
         tvBanner = findViewById(R.id.tv_banner)
+        spSource = findViewById<View>(R.id.sp_source) as? Spinner
+        tileVod = findViewById<View>(R.id.tile_vod) as? TextView
+        tileJsm = findViewById<View>(R.id.tile_jsm) as? TextView
+        tileCustom = findViewById<View>(R.id.tile_custom) as? TextView
     }
 
     private fun setupSourceSpinner() {
+        val spinner = spSource ?: return
         val names = AppConstants.SOURCE_PRESETS.map { it.name }
         val adapter = ArrayAdapter(this, R.layout.item_spinner, names)
         adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
-        spSource.adapter = adapter
-        restoreSourceSelection()
-        sourceReady = true
-        spSource.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+        spinner.adapter = adapter
+        spinner.setSelection(sourceIndex)
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (!sourceReady) return
-                val preset = AppConstants.SOURCE_PRESETS.getOrNull(position) ?: return
-                if (preset.url.isEmpty()) {
-                    etUrl.visibility = View.VISIBLE
-                    if (etUrl.text.isNullOrBlank()) etUrl.requestFocus()
-                } else {
-                    etUrl.visibility = View.GONE
-                    etUrl.setText(preset.url)
-                }
+                selectSource(position)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
     }
 
+    private fun setupSourceTiles() {
+        tileVod?.setOnClickListener { selectSource(0) }
+        tileJsm?.setOnClickListener { selectSource(1) }
+        tileCustom?.setOnClickListener { selectSource(AppConstants.INDEX_CUSTOM) }
+    }
+
     private fun restoreSourceSelection() {
-        val savedUrl = prefs.getString(AppConstants.KEY_LAST_URL, null)
+        if (prefs.contains(AppConstants.KEY_SOURCE_INDEX)) {
+            sourceIndex = prefs.getInt(AppConstants.KEY_SOURCE_INDEX, 0)
+                .coerceIn(0, AppConstants.SOURCE_PRESETS.lastIndex)
+            etUrl.setText(prefs.getString(AppConstants.KEY_CUSTOM_URL, "") ?: "")
+            return
+        }
+        val last = prefs.getString(AppConstants.KEY_LAST_URL, null)
             ?: AppConstants.DEFAULT_SOURCE_URL
-        val match = AppConstants.SOURCE_PRESETS.indexOfFirst { it.url.isNotEmpty() && it.url == savedUrl }
+        val match = AppConstants.SOURCE_PRESETS.indexOfFirst { it.url.isNotEmpty() && it.url == last }
         if (match >= 0) {
-            spSource.setSelection(match)
-            etUrl.visibility = View.GONE
-            etUrl.setText(savedUrl)
+            sourceIndex = match
+            etUrl.setText("")
         } else {
-            val custom = AppConstants.SOURCE_PRESETS.indexOfFirst { it.url.isEmpty() }.coerceAtLeast(0)
-            spSource.setSelection(custom)
-            etUrl.visibility = View.VISIBLE
-            etUrl.setText(savedUrl)
+            sourceIndex = AppConstants.INDEX_CUSTOM
+            etUrl.setText(last)
+            prefs.edit().putString(AppConstants.KEY_CUSTOM_URL, last).apply()
+        }
+        prefs.edit().putInt(AppConstants.KEY_SOURCE_INDEX, sourceIndex).apply()
+    }
+
+    private fun selectSource(index: Int) {
+        persistCustomUrl()
+        sourceIndex = index.coerceIn(0, AppConstants.SOURCE_PRESETS.lastIndex)
+        prefs.edit().putInt(AppConstants.KEY_SOURCE_INDEX, sourceIndex).apply()
+        if (spSource?.selectedItemPosition != sourceIndex) {
+            sourceReady = false
+            spSource?.setSelection(sourceIndex)
+            sourceReady = true
+        }
+        applySourceUi()
+    }
+
+    private fun applySourceUi() {
+        val custom = sourceIndex == AppConstants.INDEX_CUSTOM
+        customRow.visibility = if (custom) View.VISIBLE else View.GONE
+        if (custom) {
+            etUrl.setText(prefs.getString(AppConstants.KEY_CUSTOM_URL, "") ?: "")
+        }
+        styleTile(tileVod, sourceIndex == 0)
+        styleTile(tileJsm, sourceIndex == 1)
+        styleTile(tileCustom, custom)
+    }
+
+    private fun styleTile(tile: TextView?, selected: Boolean) {
+        tile ?: return
+        tile.setBackgroundResource(
+            if (selected) R.drawable.bg_source_tile_selected else R.drawable.bg_source_tile
+        )
+        tile.setTextColor(
+            ContextCompat.getColor(this, if (selected) R.color.cyan else R.color.text_primary)
+        )
+    }
+
+    private fun persistCustomUrl() {
+        if (sourceIndex == AppConstants.INDEX_CUSTOM) {
+            prefs.edit().putString(AppConstants.KEY_CUSTOM_URL, etUrl.text.toString()).apply()
         }
     }
 
+    private fun clearCustomUrl() {
+        etUrl.setText("")
+        prefs.edit().putString(AppConstants.KEY_CUSTOM_URL, "").apply()
+        etUrl.requestFocus()
+        if (isTvDevice) enterCustomEdit()
+    }
+
     private fun currentSourceUrl(): String {
-        val preset = AppConstants.SOURCE_PRESETS.getOrNull(spSource.selectedItemPosition)
+        val preset = AppConstants.SOURCE_PRESETS.getOrNull(sourceIndex)
         return if (preset == null || preset.url.isEmpty()) {
             etUrl.text.toString().trim()
         } else {
@@ -156,19 +232,188 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
     }
 
-    private fun setupTvFocusAnim() {
-        val focusListener = View.OnFocusChangeListener { v, hasFocus ->
-            val scale = if (hasFocus) FOCUS_SCALE else 1.0f
-            v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+    private fun setupTvControls() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            etUrl.showSoftInputOnFocus = false
         }
-        listOf(spSource, etUrl, btnStart, btnStop, btnPerm, cbBoot, tvStatus).forEach {
-            it.onFocusChangeListener = focusListener
+        etUrl.setOnEditorActionListener { _, actionId, event ->
+            val enter = actionId == EditorInfo.IME_ACTION_DONE ||
+                (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
+            if (enter) {
+                exitCustomEdit()
+                btnStart.requestFocus()
+                true
+            } else {
+                false
+            }
         }
+        etUrl.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            if (editingCustom) {
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    exitCustomEdit()
+                    tileCustom?.requestFocus()
+                    true
+                } else {
+                    false
+                }
+            } else {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        enterCustomEdit()
+                        true
+                    }
+                    KeyEvent.KEYCODE_BACK -> {
+                        tileCustom?.requestFocus()
+                        true
+                    }
+                    else -> handleTvKey(keyCode)
+                }
+            }
+        }
+        tvStatus.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    (lastMainFocus ?: btnStart).requestFocus()
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    scrollLog(false)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    scrollLog(true)
+                    true
+                }
+                else -> false
+            }
+        }
+        listOfNotNull(
+            tileVod, tileJsm, tileCustom, btnClear, btnStart, btnStop, btnPerm, cbBoot
+        ).forEach { view ->
+            view.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                handleTvKey(keyCode)
+            }
+        }
+        btnStart.post { btnStart.requestFocus() }
+    }
+
+    private fun enterCustomEdit() {
+        editingCustom = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            etUrl.showSoftInputOnFocus = true
+        }
+        etUrl.requestFocus()
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(etUrl, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun exitCustomEdit() {
+        editingCustom = false
+        persistCustomUrl()
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(etUrl.windowToken, 0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            etUrl.showSoftInputOnFocus = false
+        }
+    }
+
+    private fun tvRows(): List<List<View>> {
+        val rows = mutableListOf<List<View>>()
+        if (downloading) {
+            if (btnStop.isEnabled) rows.add(listOf<View>(btnStop))
+            rows.add(listOf<View>(cbBoot))
+            return rows
+        }
+        val tiles = listOfNotNull<View>(tileVod, tileJsm, tileCustom)
+        if (tiles.isNotEmpty()) rows.add(tiles)
+        if (customRow.visibility == View.VISIBLE) {
+            rows.add(listOf<View>(etUrl, btnClear))
+        }
+        if (btnStart.isEnabled) rows.add(listOf<View>(btnStart))
+        val bottom = mutableListOf<View>()
+        if (btnPerm.isEnabled) bottom.add(btnPerm)
+        bottom.add(cbBoot)
+        rows.add(bottom)
+        return rows
+    }
+
+    private fun findInRows(rows: List<List<View>>, target: View): Pair<Int, Int>? {
+        rows.forEachIndexed { r, row ->
+            val c = row.indexOf(target)
+            if (c >= 0) return r to c
+        }
+        return null
+    }
+
+    private fun handleTvKey(keyCode: Int): Boolean {
+        val focused = currentFocus ?: return false
+        if (focused == tvStatus || editingCustom) return false
+        val rows = tvRows()
+        if (rows.isEmpty()) return false
+        val pos = findInRows(rows, focused) ?: return false
+        val (r, c) = pos
+        val row = rows[r]
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                val next = rows[(r + 1) % rows.size]
+                next[c.coerceAtMost(next.lastIndex)].requestFocus()
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                val next = rows[(r - 1 + rows.size) % rows.size]
+                next[c.coerceAtMost(next.lastIndex)].requestFocus()
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (c > 0) {
+                    row[c - 1].requestFocus()
+                    return true
+                }
+                return false
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (c < row.lastIndex) {
+                    row[c + 1].requestFocus()
+                    return true
+                }
+                lastMainFocus = focused
+                tvStatus.requestFocus()
+                return true
+            }
+            else -> return false
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (!isTvDevice) return super.onKeyDown(keyCode, event)
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (editingCustom) {
+                exitCustomEdit()
+                tileCustom?.requestFocus()
+                return true
+            }
+            if (currentFocus == tvStatus) {
+                (lastMainFocus ?: btnStart).requestFocus()
+                return true
+            }
+        }
+        if (handleTvKey(keyCode)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun scrollLog(down: Boolean) {
+        val delta = (tvStatus.height / 3).coerceAtLeast(48)
+        val next = (tvStatus.scrollY + if (down) delta else -delta).coerceAtLeast(0)
+        tvStatus.scrollTo(0, next)
     }
 
     override fun onResume() {
         super.onResume()
         refreshPermStatus()
+        if (isTvDevice && currentFocus == null) btnStart.post { btnStart.requestFocus() }
     }
 
     private fun refreshPermStatus() {
@@ -227,7 +472,10 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_PERM) refreshPermStatus()
+        if (requestCode == REQ_PERM) {
+            refreshPermStatus()
+            if (isTvDevice) (if (btnPerm.isEnabled) btnPerm else btnStart).requestFocus()
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -236,13 +484,31 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_PERM) refreshPermStatus()
+        if (requestCode == REQ_PERM) {
+            refreshPermStatus()
+            if (isTvDevice) (if (btnPerm.isEnabled) btnPerm else btnStart).requestFocus()
+        }
+    }
+
+    private fun setSourceControlsEnabled(enabled: Boolean) {
+        spSource?.isEnabled = enabled
+        tileVod?.isEnabled = enabled
+        tileJsm?.isEnabled = enabled
+        tileCustom?.isEnabled = enabled
+        etUrl.isEnabled = enabled
+        btnClear.isEnabled = enabled
+        listOfNotNull(tileVod, tileJsm, tileCustom).forEach {
+            it.isFocusable = enabled
+            it.isClickable = enabled
+        }
     }
 
     private fun startDownload() {
+        persistCustomUrl()
         val url = currentSourceUrl()
         if (url.isEmpty()) {
             appendLog(getString(R.string.log_empty_url))
+            if (sourceIndex == AppConstants.INDEX_CUSTOM) etUrl.requestFocus()
             return
         }
         val root = resolveRootDir(this)
@@ -256,27 +522,26 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnStart.isEnabled = false
         btnStop.isEnabled = true
         btnPerm.isEnabled = false
-        spSource.isEnabled = false
-        etUrl.isEnabled = false
-        progress.visibility = View.VISIBLE
+        setSourceControlsEnabled(false)
         progress.isIndeterminate = true
         progress.progress = 0
         progress.max = 100
         logLines.clear()
         tvStatus.text = ""
+        tvStatus.scrollTo(0, 0)
 
         showBanner(R.drawable.bg_banner_loading, R.color.cyan, getString(R.string.banner_start))
         tvSavePath.text = getString(R.string.save_path, root.absolutePath)
+        if (isTvDevice) btnStop.requestFocus()
 
         lifecycleScope.launch {
             val result = downloader.run(url)
             downloading = false
-            btnStart.isEnabled = true
             btnStop.isEnabled = false
-            spSource.isEnabled = true
-            etUrl.isEnabled = true
+            setSourceControlsEnabled(true)
             progress.isIndeterminate = false
             refreshPermStatus()
+            if (isTvDevice) btnStart.requestFocus()
             result.fold(
                 onSuccess = { summary ->
                     progress.max = summary.discovered.coerceAtLeast(1)
@@ -298,7 +563,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                     }
                 },
                 onFailure = { err ->
-                    progress.visibility = View.GONE
+                    progress.progress = 0
                     showBanner(R.drawable.bg_banner_fail, R.color.banner_fail, getString(R.string.banner_fail))
                     appendLog(getString(R.string.log_fail, err.message ?: ""))
                 }
@@ -308,7 +573,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     private fun stopDownload() {
         downloader.cancel()
-        btnStop.isEnabled = false
         showBanner(R.drawable.bg_banner_fail, R.color.banner_fail, getString(R.string.banner_cancelled))
     }
 

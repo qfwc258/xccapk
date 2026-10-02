@@ -10,14 +10,19 @@
     <string name="label_storage">存储</string>
     <string name="label_log">运行日志</string>
     <string name="hint_custom_url">粘贴自定义直链</string>
+    <string name="source_vod">点播 vod</string>
+    <string name="source_jsm">合集 jsm</string>
+    <string name="source_custom">自定义</string>
     <string name="btn_start">开始下载</string>
     <string name="btn_stop">停止</string>
+    <string name="btn_clear">清空</string>
     <string name="btn_grant_permission">授权存储</string>
     <string name="btn_permission_granted">已授权</string>
     <string name="perm_checking">正在检查存储权限</string>
     <string name="perm_granted">已授权，写入 /sdcard/xcctv</string>
     <string name="perm_fallback">无全部文件权限，写入应用目录</string>
     <string name="perm_denied">存储目录不可写，请先授权</string>
+    <string name="banner_idle">等待任务</string>
     <string name="banner_start">正在解析源配置</string>
     <string name="banner_done">下载完成</string>
     <string name="banner_partial">完成，部分文件失败</string>
@@ -30,4 +35,8 @@
     <string name="log_cancelled">任务已停止</string>
     <string name="boot_launch">开机自启</string>
     <string name="save_path">保存目录  %1$s</string>
+    <string name="cd_source_vod">选择点播源 vod.json</string>
+    <string name="cd_source_jsm">选择合集源 jsm.json</string>
+    <string name="cd_source_custom">选择自定义源</string>
+    <string name="cd_clear">清空自定义地址</string>
 </resources>
