@@ -142,9 +142,8 @@ class XcctvSourceDownloader(
 
                 // 4b. ✅ 扫本轮新下载文件的源码，提取里面的 ./xxx 嵌套路径
                 val beforeCount = allPaths.size
-                val newRelPaths = scanNewlyDownloadedSource()
-                progressListener?.onLog("   ↳ 源码扫描新发现: ${newRelPaths.size} 个（本轮前 ${beforeCount}）")
-                // newRelPaths 已经被 scanNewlyDownloadedSource 内部 add 到 allPaths
+                val newFound = scanNewlyDownloadedSource()
+                progressListener?.onLog("   ↳ 源码扫描新发现: $newFound 个（本轮前 $beforeCount）")
 
                 if (allPaths.size == beforeCount) {
                     // 没有新路径了 → 退出
