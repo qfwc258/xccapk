@@ -1,6 +1,6 @@
 # XCCTV 助手
 
-Android TV / 手机端源文件下载助手。解析 TVBox / FongMi 配置里的相对路径，把 `vod.json` 及依赖的 jar、js、json 下载到 `/sdcard/xcctv`，供播放器以 `file://xcctv/` 协议读取。
+Android TV / 手机端源文件下载助手。解析 TVBox / FongMi 配置里的相对路径，把 `vod.json` 及依赖的 jar、js、json 增量下载到 `/sdcard/xcctv`（不可写时回退到应用外部目录），供播放器以 `file://xcctv/` 协议读取。
 
 ## 工程结构
 
@@ -8,13 +8,13 @@ Android TV / 手机端源文件下载助手。解析 TVBox / FongMi 配置里的
 app/                 Android 应用
   src/main/java/com/xcctv/tvhelper/
     MainActivity.kt            主界面
-    XcctvSourceDownloader.kt   源配置解析与并行下载
+    XcctvSourceDownloader.kt   源配置解析、增量下载、失败重试、可取消
     XcctvProvider.kt           file://xcctv/ ContentProvider
     BootReceiver.kt            开机自启（默认关闭）
-    AppConstants.kt            常量
-    StoragePaths.kt            本地目录
+    AppConstants.kt            常量与源预设
+    StoragePaths.kt            本地目录兜底
 signing/             Release 签名
-tv/                  同步自 qist/tvbox 的源配置（构建 APK 时不参与编译）
+tv/                  源配置（构建 APK 时不参与编译）
 .github/workflows/   APK 构建与源同步
 ```
 
@@ -22,17 +22,21 @@ tv/                  同步自 qist/tvbox 的源配置（构建 APK 时不参与
 
 - TV / 手机自动识别，横屏 TV 用左右分栏布局
 - 遥控器焦点放大，按钮与输入框使用 TV 焦点选择器
-- 4 线程并行下载，JSON / JS / PY 嵌套相对路径循环扫描
-- 固定写入 `/sdcard/xcctv`（需全部文件访问权限）
+- 源预设下拉（vod.json / jsm.json / 自定义直链）
+- 4 线程并行下载；本地已存在且 MD5 匹配则跳过
+- 单文件失败自动重试 2 次，结束后列出失败清单
+- 下载可停止；进度条按完成数 / 总数更新
+- 日志最多保留 80 行
+- 优先写入 `/sdcard/xcctv`，不可写则用应用外部目录 `xcctv`
 - `file://xcctv/vod.json` 给 TVBox / FongMi 使用
 - 开机自启开关，默认关闭
 
 ## 使用
 
 1. 安装 APK
-2. 首次打开点「授权」，授予所有文件访问权限
-3. 源地址已预填，可改成自定义直链
-4. 点「开始下载」，文件保存到 `/sdcard/xcctv`
+2. 首次打开可点「授权」，授予所有文件访问权限（不授权则写入应用目录）
+3. 从源列表选择预设，或选「自定义」粘贴直链
+4. 点「开始下载」，可用「停止」中断
 5. 播放器添加源：`file://xcctv/vod.json`
 
 ## 构建
@@ -47,4 +51,4 @@ tv/                  同步自 qist/tvbox 的源配置（构建 APK 时不参与
 
 输出 APK：`app/build/outputs/apk/<buildType>/XCCTV-TVHelper-<version>-<buildType>.apk`
 
-最低 SDK 21，目标 SDK 34。JDK 17 + Gradle 8.5。
+最低 SDK 21，目标 SDK 34。JDK 17 + Gradle 8.5。当前版本 1.3。

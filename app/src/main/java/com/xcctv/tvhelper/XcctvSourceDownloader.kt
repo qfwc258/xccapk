@@ -1,11 +1,14 @@
 package com.xcctv.tvhelper
 
+import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.JsonElement
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -17,7 +20,19 @@ import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
+import kotlin.coroutines.coroutineContext
+
+data class DownloadSummary(
+    val discovered: Int,
+    val skipped: Int,
+    val downloaded: Int,
+    val failed: List<String>,
+    val rootDir: String,
+    val cancelled: Boolean
+)
 
 interface DownloadProgressListener {
     fun onProgress(current: Int, total: Int, file: String)
@@ -25,6 +40,7 @@ interface DownloadProgressListener {
 }
 
 class XcctvSourceDownloader(
+    private val context: Context,
     private val progressListener: DownloadProgressListener? = null,
     private val concurrency: Int = AppConstants.DOWNLOAD_CONCURRENCY
 ) {
@@ -36,7 +52,7 @@ class XcctvSourceDownloader(
         .build()
 
     private val gson = Gson()
-    val rootDir: File = resolveRootDir()
+    private val cancelled = AtomicBoolean(false)
 
     private val allPaths = ConcurrentHashMap.newKeySet<String>()
     private val spiderMd5Map = ConcurrentHashMap<String, String>()
@@ -47,22 +63,33 @@ class XcctvSourceDownloader(
         Pattern.compile("""`(\.\/[A-Za-z0-9_\-./]+(?:\.[A-Za-z0-9]+)?)`""")
     )
 
-    suspend fun run(mainSourceUrl: String): Result<List<String>> = withContext(Dispatchers.IO) {
-        try {
-            allPaths.clear()
-            spiderMd5Map.clear()
-            scannedLocalFiles.clear()
+    fun cancel() {
+        cancelled.set(true)
+    }
 
+    suspend fun run(mainSourceUrl: String): Result<DownloadSummary> = withContext(Dispatchers.IO) {
+        cancelled.set(false)
+        allPaths.clear()
+        spiderMd5Map.clear()
+        scannedLocalFiles.clear()
+
+        val rootDir = resolveRootDir(context)
+        val skipped = AtomicInteger(0)
+        val downloaded = AtomicInteger(0)
+        val failed = ConcurrentHashMap.newKeySet<String>()
+
+        try {
             progressListener?.onLog("保存目录: ${rootDir.absolutePath}")
             progressListener?.onLog("源地址: $mainSourceUrl")
             progressListener?.onLog("线程数: $concurrency")
 
             if (!rootDir.exists() || !rootDir.canWrite()) {
                 return@withContext Result.failure(
-                    Exception("保存目录不可写: ${rootDir.absolutePath}\n请先授予 /sdcard 全部文件访问权限")
+                    Exception("保存目录不可写: ${rootDir.absolutePath}")
                 )
             }
 
+            checkCancel()
             progressListener?.onLog("开始下载主配置...")
             val mainJsonText = httpGetText(mainSourceUrl)
 
@@ -76,85 +103,152 @@ class XcctvSourceDownloader(
             scannedLocalFiles.add(mainFile.absolutePath)
 
             val baseUrlObj = URL(mainSourceUrl)
-            val downloaded = ConcurrentHashMap.newKeySet<String>()
+            val processedPaths = ConcurrentHashMap.newKeySet<String>()
             var round = 0
 
             while (round < AppConstants.MAX_SCAN_ROUNDS) {
+                checkCancel()
                 round++
-                val pending = allPaths.filter { it !in downloaded }
+                val pending = allPaths.filter { it !in processedPaths }
                 if (pending.isEmpty()) {
                     progressListener?.onLog("无待下载文件，停止")
                     break
                 }
-                progressListener?.onLog("第 $round 轮，待下载/源码扫描: ${pending.size} 个")
+                progressListener?.onLog("第 $round 轮，待处理: ${pending.size} 个")
 
                 val sem = Semaphore(concurrency)
                 val mutex = Mutex()
-                var completed = 0
 
                 coroutineScope {
                     pending.map { relPath ->
                         async(Dispatchers.IO) {
                             sem.acquire()
                             try {
-                                downloadOne(baseUrlObj, relPath)
+                                checkCancel()
+                                when (downloadOne(rootDir, baseUrlObj, relPath)) {
+                                    "skip" -> skipped.incrementAndGet()
+                                    "ok" -> downloaded.incrementAndGet()
+                                    else -> failed.add(relPath)
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
                             } catch (e: Exception) {
-                                progressListener?.onLog("$relPath 下载失败: ${e.message}")
+                                failed.add(relPath)
+                                progressListener?.onLog("$relPath 失败: ${e.message}")
                             } finally {
-                                downloaded.add(relPath)
+                                processedPaths.add(relPath)
                                 sem.release()
                             }
                             mutex.withLock {
-                                completed++
-                                progressListener?.onProgress(completed, pending.size, relPath)
+                                progressListener?.onProgress(
+                                    processedPaths.size,
+                                    allPaths.size,
+                                    relPath
+                                )
                             }
                         }
                     }.awaitAll()
                 }
 
                 val beforeCount = allPaths.size
-                val newFound = scanNewlyDownloadedSource()
-                progressListener?.onLog("源码扫描新发现: $newFound 个（本轮前 $beforeCount）")
-
+                val newFound = scanNewlyDownloadedSource(rootDir)
+                if (newFound > 0) {
+                    progressListener?.onLog("源码扫描新发现: $newFound 个")
+                }
                 if (allPaths.size == beforeCount) {
                     progressListener?.onLog("无新嵌套路径，停止递归")
                     break
                 }
             }
 
-            val actualCount = walkFiles(rootDir) - 1
-            val failed = allPaths.size - actualCount
-            if (failed > 0) {
-                progressListener?.onLog("有 $failed 个文件可能未落盘")
+            val failList = failed.toList().sorted()
+            progressListener?.onLog(
+                "完成。发现 ${allPaths.size}，下载 ${downloaded.get()}，跳过 ${skipped.get()}，失败 ${failList.size}"
+            )
+            if (failList.isNotEmpty()) {
+                progressListener?.onLog("失败清单:")
+                failList.forEach { progressListener?.onLog("  $it") }
             }
-            progressListener?.onLog("完成。共发现 ${allPaths.size} 个，实际落盘 $actualCount 个")
 
-            Result.success(allPaths.toList())
+            Result.success(
+                DownloadSummary(
+                    discovered = allPaths.size,
+                    skipped = skipped.get(),
+                    downloaded = downloaded.get(),
+                    failed = failList,
+                    rootDir = rootDir.absolutePath,
+                    cancelled = false
+                )
+            )
+        } catch (ex: CancellationException) {
+            progressListener?.onLog("已停止")
+            Result.success(
+                DownloadSummary(
+                    discovered = allPaths.size,
+                    skipped = skipped.get(),
+                    downloaded = downloaded.get(),
+                    failed = failed.toList().sorted(),
+                    rootDir = rootDir.absolutePath,
+                    cancelled = true
+                )
+            )
         } catch (ex: Exception) {
             progressListener?.onLog("出错: ${ex.message}")
             Result.failure(ex)
         }
     }
 
-    private fun downloadOne(baseUrlObj: URL, relPath: String) {
-        val absUrl = buildChildUrl(baseUrlObj, relPath)
+    private suspend fun checkCancel() {
+        coroutineContext.ensureActive()
+        if (cancelled.get()) throw CancellationException("已停止")
+    }
+
+    private suspend fun downloadOne(rootDir: File, baseUrlObj: URL, relPath: String): String {
+        checkCancel()
         val localFile = File(rootDir, relPath)
         localFile.parentFile?.mkdirs()
 
-        localFile.writeBytes(httpGetBytes(absUrl))
+        if (canSkip(localFile, relPath)) {
+            return "skip"
+        }
 
-        val expectMd5 = spiderMd5Map[relPath]
-        if (!expectMd5.isNullOrEmpty()) {
-            val realMd5 = getFileMd5(localFile)
-            if (expectMd5.equals(realMd5, ignoreCase = true)) {
-                progressListener?.onLog("$relPath MD5 校验通过")
-            } else {
-                progressListener?.onLog("$relPath MD5 不匹配")
+        val absUrl = buildChildUrl(baseUrlObj, relPath)
+        var lastError: Exception? = null
+        val attempts = AppConstants.MAX_RETRIES + 1
+        repeat(attempts) { attempt ->
+            checkCancel()
+            try {
+                localFile.writeBytes(httpGetBytes(absUrl))
+                val expectMd5 = spiderMd5Map[relPath]
+                if (!expectMd5.isNullOrEmpty()) {
+                    val realMd5 = getFileMd5(localFile)
+                    if (!expectMd5.equals(realMd5, ignoreCase = true)) {
+                        throw Exception("MD5 不匹配")
+                    }
+                }
+                return "ok"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt < AppConstants.MAX_RETRIES) {
+                    progressListener?.onLog("$relPath 重试 ${attempt + 1}/${AppConstants.MAX_RETRIES}: ${e.message}")
+                }
             }
         }
+        throw lastError ?: Exception("下载失败")
     }
 
-    private fun scanNewlyDownloadedSource(): Int {
+    private fun canSkip(localFile: File, relPath: String): Boolean {
+        if (!localFile.exists() || localFile.length() <= 0) return false
+        val expectMd5 = spiderMd5Map[relPath]
+        if (!expectMd5.isNullOrEmpty()) {
+            return expectMd5.equals(getFileMd5(localFile), ignoreCase = true)
+        }
+        return true
+    }
+
+    private fun scanNewlyDownloadedSource(rootDir: File): Int {
         var newFound = 0
         rootDir.walkTopDown().forEach { file ->
             if (!file.isFile) return@forEach
@@ -186,10 +280,7 @@ class XcctvSourceDownloader(
                         if (clean.contains(";md5;")) continue
 
                         val finalRel = if (baseDir.isNotEmpty()) "$baseDir/$clean" else clean
-                        if (allPaths.add(finalRel)) {
-                            newFound++
-                            progressListener?.onLog("源码发现: $finalRel")
-                        }
+                        if (allPaths.add(finalRel)) newFound++
                     }
                 }
             } catch (_: Exception) {
@@ -257,14 +348,6 @@ class XcctvSourceDownloader(
 
     private fun httpGetText(url: String): String =
         String(httpGetBytes(url), Charsets.UTF_8)
-
-    private fun walkFiles(dir: File): Int {
-        var n = 0
-        dir.listFiles()?.forEach {
-            if (it.isDirectory) n += walkFiles(it) else n++
-        }
-        return n
-    }
 
     private fun getFileMd5(file: File): String {
         val digest = MessageDigest.getInstance("MD5")

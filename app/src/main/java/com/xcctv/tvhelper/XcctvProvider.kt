@@ -8,16 +8,14 @@ import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.FileNotFoundException
 
-/**
- * 对外提供 file://xcctv/xxx 读取能力，文件来自 /sdcard/xcctv。
- */
 class XcctvProvider : ContentProvider() {
 
     override fun onCreate(): Boolean = true
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         val relPath = uri.path?.trimStart('/') ?: throw FileNotFoundException()
-        val root = resolveRootDir()
+        val ctx = context ?: throw FileNotFoundException()
+        val root = resolveRootDir(ctx)
         val target = File(root, relPath)
 
         if (!target.canonicalPath.startsWith(root.canonicalPath + File.separator) &&

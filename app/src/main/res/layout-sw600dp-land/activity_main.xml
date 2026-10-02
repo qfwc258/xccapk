@@ -59,15 +59,24 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/label_source_url"
+                android:text="@string/label_source"
                 android:textColor="@color/text_body"
                 android:textSize="13sp"
                 android:layout_marginBottom="8dp"/>
+            <Spinner
+                android:id="@+id/sp_source"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input_tv"
+                android:padding="12dp"
+                android:spinnerMode="dropdown"
+                android:nextFocusDown="@id/btn_start"/>
             <EditText
                 android:id="@+id/et_url"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/hint_source_url_tv"
+                android:layout_marginTop="8dp"
+                android:hint="@string/hint_custom_url"
                 android:inputType="textUri"
                 android:singleLine="true"
                 android:textSize="14sp"
@@ -76,6 +85,7 @@
                 android:background="@drawable/bg_input_tv"
                 android:padding="14dp"
                 android:textCursorDrawable="@null"
+                android:visibility="gone"
                 android:nextFocusDown="@id/btn_start"/>
         </LinearLayout>
 
@@ -90,42 +100,22 @@
             android:textStyle="bold"
             android:background="@drawable/bg_btn_primary_tv"
             android:paddingVertical="16dp"
-            android:nextFocusUp="@id/et_url"
-            android:nextFocusDown="@id/btn_clear"/>
+            android:nextFocusUp="@id/sp_source"
+            android:nextFocusDown="@id/btn_stop"/>
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btn_stop"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:orientation="horizontal">
-            <Button
-                android:id="@+id/btn_clear"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/btn_clear"
-                android:textColor="@color/text_input"
-                android:textSize="15sp"
-                android:background="@drawable/bg_btn_ghost_tv"
-                android:paddingVertical="14dp"
-                android:nextFocusUp="@id/btn_start"
-                android:nextFocusRight="@id/btn_folder"
-                android:nextFocusDown="@id/btn_perm"/>
-            <Button
-                android:id="@+id/btn_folder"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="10dp"
-                android:text="@string/btn_default_source"
-                android:textColor="@color/text_input"
-                android:textSize="15sp"
-                android:background="@drawable/bg_btn_ghost_tv"
-                android:paddingVertical="14dp"
-                android:nextFocusLeft="@id/btn_clear"
-                android:nextFocusUp="@id/btn_start"
-                android:nextFocusDown="@id/btn_perm"/>
-        </LinearLayout>
+            android:text="@string/btn_stop"
+            android:textColor="@color/text_input"
+            android:textSize="15sp"
+            android:background="@drawable/bg_btn_ghost_tv"
+            android:paddingVertical="14dp"
+            android:enabled="false"
+            android:nextFocusUp="@id/btn_start"
+            android:nextFocusDown="@id/btn_perm"/>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -151,9 +141,17 @@
                 android:background="@drawable/bg_btn_primary_tv"
                 android:paddingVertical="10dp"
                 android:paddingHorizontal="20dp"
-                android:nextFocusUp="@id/btn_clear"
+                android:nextFocusUp="@id/btn_stop"
                 android:nextFocusDown="@id/cb_boot"/>
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_save_path"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"/>
 
         <CheckBox
             android:id="@+id/cb_boot"
