@@ -51,4 +51,4 @@ tv/                  源配置（构建 APK 时不参与编译）
 
 输出 APK：`app/build/outputs/apk/<buildType>/XCCTV-TVHelper-<version>-<buildType>.apk`
 
-最低 SDK 21，目标 SDK 34。JDK 17 + Gradle 8.5。当前版本 1.3。
+最低 SDK 21，目标 SDK 34。JDK 17 + Gradle 8.5。当前版本 1.4。

@@ -54,6 +54,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var progress: ProgressBar
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
+    private lateinit var tvDevice: TextView
 
     private val logLines = ArrayDeque<String>()
     private var downloading = false
@@ -68,6 +69,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
         tvTitle.setText(if (isTvDevice) R.string.title_tv else R.string.title_phone)
         tvSubtitle.setText(R.string.subtitle)
+        tvDevice.setText(if (isTvDevice) R.string.device_tv else R.string.device_phone)
 
         setupSourceSpinner()
         refreshPermStatus()
@@ -101,12 +103,15 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         progress = findViewById(R.id.progress)
         tvTitle = findViewById(R.id.tv_title)
         tvSubtitle = findViewById(R.id.tv_subtitle)
+        tvDevice = findViewById(R.id.tv_device)
         tvBanner = findViewById(R.id.tv_banner)
     }
 
     private fun setupSourceSpinner() {
         val names = AppConstants.SOURCE_PRESETS.map { it.name }
-        spSource.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, names)
+        val adapter = ArrayAdapter(this, R.layout.item_spinner, names)
+        adapter.setDropDownViewResource(R.layout.item_spinner_dropdown)
+        spSource.adapter = adapter
         restoreSourceSelection()
         sourceReady = true
         spSource.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -260,9 +265,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         logLines.clear()
         tvStatus.text = ""
 
-        tvBanner.visibility = View.VISIBLE
-        tvBanner.setBackgroundResource(R.drawable.bg_banner_loading)
-        tvBanner.setText(R.string.banner_start)
+        showBanner(R.drawable.bg_banner_loading, R.color.cyan, getString(R.string.banner_start))
         tvSavePath.text = getString(R.string.save_path, root.absolutePath)
 
         lifecycleScope.launch {
@@ -281,26 +284,22 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                     tvSavePath.text = getString(R.string.save_path, summary.rootDir)
                     when {
                         summary.cancelled -> {
-                            tvBanner.setBackgroundResource(R.drawable.bg_banner_fail)
-                            tvBanner.setText(R.string.banner_cancelled)
+                            showBanner(R.drawable.bg_banner_fail, R.color.banner_fail, getString(R.string.banner_cancelled))
                             appendLog(getString(R.string.log_cancelled))
                         }
                         summary.failed.isNotEmpty() -> {
-                            tvBanner.setBackgroundResource(R.drawable.bg_banner_fail)
-                            tvBanner.setText(R.string.banner_partial)
+                            showBanner(R.drawable.bg_banner_fail, R.color.status_warn, getString(R.string.banner_partial))
                             appendLog(getString(R.string.log_all_done, summary.rootDir))
                         }
                         else -> {
-                            tvBanner.setBackgroundResource(R.drawable.bg_banner_done)
-                            tvBanner.setText(R.string.banner_done)
+                            showBanner(R.drawable.bg_banner_done, R.color.status_ok, getString(R.string.banner_done))
                             appendLog(getString(R.string.log_all_done, summary.rootDir))
                         }
                     }
                 },
                 onFailure = { err ->
                     progress.visibility = View.GONE
-                    tvBanner.setBackgroundResource(R.drawable.bg_banner_fail)
-                    tvBanner.setText(R.string.banner_fail)
+                    showBanner(R.drawable.bg_banner_fail, R.color.banner_fail, getString(R.string.banner_fail))
                     appendLog(getString(R.string.log_fail, err.message ?: ""))
                 }
             )
@@ -310,7 +309,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private fun stopDownload() {
         downloader.cancel()
         btnStop.isEnabled = false
-        tvBanner.setText(R.string.banner_cancelled)
+        showBanner(R.drawable.bg_banner_fail, R.color.banner_fail, getString(R.string.banner_cancelled))
+    }
+
+    private fun showBanner(bg: Int, color: Int, text: String) {
+        tvBanner.visibility = View.VISIBLE
+        tvBanner.setBackgroundResource(bg)
+        tvBanner.setTextColor(ContextCompat.getColor(this, color))
+        tvBanner.text = text
     }
 
     private fun appendLog(msg: String) {
@@ -336,7 +342,11 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             progress.max = t
             progress.progress = current.coerceIn(0, t)
             progress.isIndeterminate = false
-            tvBanner.text = getString(R.string.banner_progress, current, total, file)
+            showBanner(
+                R.drawable.bg_banner_loading,
+                R.color.cyan,
+                getString(R.string.banner_progress, current, total, file)
+            )
         }
     }
 

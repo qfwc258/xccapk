@@ -9,41 +9,82 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp"
         android:background="@drawable/bg_title_card">
 
-        <TextView
-            android:id="@+id/tv_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/title_phone"
-            android:textColor="@color/text_primary"
-            android:textSize="22sp"
-            android:textStyle="bold"/>
+        <View
+            android:layout_width="3dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_accent_bar"/>
 
-        <TextView
-            android:id="@+id/tv_subtitle"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/subtitle"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp"/>
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tv_title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/title_phone"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.02"/>
+
+                <TextView
+                    android:id="@+id/tv_device"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/device_phone"
+                    android:textColor="@color/cyan"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp"
+                    android:background="@drawable/bg_chip"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/subtitle"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"/>
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
         android:id="@+id/tv_banner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:padding="14dp"
-        android:textColor="@color/text_primary"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:gravity="center"
+        android:layout_marginTop="12dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:textColor="@color/cyan"
+        android:textSize="13sp"
+        android:gravity="start"
         android:background="@drawable/bg_banner_loading"
-        android:visibility="gone"/>
+        android:visibility="gone"
+        android:maxLines="2"
+        android:ellipsize="end"/>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -57,8 +98,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/label_source"
-            android:textColor="@color/text_body"
-            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:letterSpacing="0.08"
             android:layout_marginBottom="8dp"/>
 
         <Spinner
@@ -66,8 +108,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_input_tv"
-            android:padding="10dp"
+            android:padding="4dp"
             android:spinnerMode="dropdown"
+            android:popupBackground="@drawable/bg_spinner_popup"
             android:nextFocusDown="@id/et_url"/>
 
         <EditText
@@ -91,34 +134,36 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="12dp"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/btn_start"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:text="@string/btn_start"
-            android:textColor="@color/text_primary"
+            android:textColor="@color/btn_primary_text"
             android:textSize="14sp"
             android:textStyle="bold"
             android:background="@drawable/bg_btn_primary_tv"
-            android:paddingVertical="12dp"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false"
             android:nextFocusUp="@id/sp_source"
             android:nextFocusRight="@id/btn_stop"/>
 
         <Button
             android:id="@+id/btn_stop"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:text="@string/btn_stop"
-            android:textColor="@color/text_input"
+            android:textColor="@color/btn_ghost_text"
             android:textSize="14sp"
             android:background="@drawable/bg_btn_ghost_tv"
-            android:paddingVertical="12dp"
-            android:layout_marginStart="8dp"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false"
+            android:layout_marginStart="10dp"
             android:enabled="false"
             android:nextFocusLeft="@id/btn_start"
             android:nextFocusDown="@id/btn_perm"/>
@@ -127,81 +172,121 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:layout_marginTop="12dp"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:background="@drawable/bg_card">
 
         <TextView
-            android:id="@+id/tv_perm_status"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/perm_checking"
-            android:textSize="12sp"
-            android:textColor="@color/text_secondary"
-            android:paddingVertical="6dp"/>
-
-        <Button
-            android:id="@+id/btn_perm"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/btn_grant_permission"
-            android:textColor="@color/text_primary"
-            android:textSize="12sp"
-            android:background="@drawable/bg_btn_primary_tv"
-            android:paddingVertical="6dp"
-            android:paddingHorizontal="16dp"
-            android:nextFocusUp="@id/btn_stop"
-            android:nextFocusDown="@id/cb_boot"/>
+            android:text="@string/label_storage"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="8dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_perm_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/perm_checking"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary"
+                android:paddingEnd="8dp"/>
+
+            <Button
+                android:id="@+id/btn_perm"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:text="@string/btn_grant_permission"
+                android:textColor="@color/btn_ghost_text"
+                android:textSize="12sp"
+                android:background="@drawable/bg_btn_ghost_tv"
+                android:stateListAnimator="@null"
+                android:textAllCaps="false"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:nextFocusUp="@id/btn_stop"
+                android:nextFocusDown="@id/cb_boot"/>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_save_path"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="11sp"
+            android:textColor="@color/text_hint"
+            android:fontFamily="monospace"
+            android:maxLines="2"
+            android:ellipsize="middle"/>
+
+        <CheckBox
+            android:id="@+id/cb_boot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/boot_launch"
+            android:textColor="@color/text_body"
+            android:textSize="13sp"
+            android:buttonTint="@color/cyan"
+            android:checked="false"
+            android:nextFocusUp="@id/btn_perm"
+            android:nextFocusDown="@id/tv_status"/>
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/tv_save_path"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:textSize="11sp"
-        android:textColor="@color/text_secondary"/>
-
-    <CheckBox
-        android:id="@+id/cb_boot"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/boot_launch"
-        android:textColor="@color/text_body"
-        android:textSize="13sp"
-        android:buttonTint="@color/cyan"
-        android:checked="false"
-        android:nextFocusUp="@id/btn_perm"
-        android:nextFocusDown="@id/tv_status"/>
 
     <ProgressBar
         android:id="@+id/progress"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:progressTint="@color/cyan"
-        android:progressBackgroundTint="@color/progress_bg"
+        android:layout_height="6dp"
+        android:layout_marginTop="12dp"
+        android:progressDrawable="@drawable/bg_progress"
         android:indeterminate="false"
         android:max="100"
         android:visibility="gone"/>
 
-    <TextView
-        android:id="@+id/tv_status"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:layout_marginTop="12dp"
-        android:textSize="12.5sp"
-        android:textColor="@color/text_body"
-        android:padding="14dp"
+        android:orientation="vertical"
         android:background="@drawable/bg_log"
-        android:fontFamily="monospace"
-        android:scrollbars="vertical"
-        android:textIsSelectable="true"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:nextFocusUp="@id/cb_boot"/>
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tv_log_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/label_log"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:textSize="12sp"
+            android:textColor="@color/text_body"
+            android:lineSpacingExtra="3dp"
+            android:fontFamily="monospace"
+            android:scrollbars="vertical"
+            android:textIsSelectable="true"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:nextFocusUp="@id/cb_boot"/>
+    </LinearLayout>
 </LinearLayout>

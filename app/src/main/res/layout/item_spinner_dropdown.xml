@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="14dp"
+    android:paddingBottom="14dp"
+    android:textColor="@color/text_input"
+    android:textSize="14sp"
+    android:background="@drawable/bg_spinner_item_selected"
+    android:gravity="center_vertical"
+    android:ellipsize="end"
+    android:maxLines="1"/>

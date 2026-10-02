@@ -8,5 +8,13 @@
         <item name="colorAccent">@color/cyan</item>
         <item name="android:textColorPrimary">@color/text_primary</item>
         <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="buttonStyle">@style/Widget.Xcctv.Button</item>
+    </style>
+
+    <style name="Widget.Xcctv.Button" parent="Widget.AppCompat.Button">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:letterSpacing">0.02</item>
     </style>
 </resources>

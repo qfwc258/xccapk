@@ -1,29 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">XCCTV助手</string>
-    <string name="title_tv">TV端 XCCTV助手</string>
-    <string name="title_phone">手机端 XCCTV助手</string>
-    <string name="subtitle">源地址解析 · 增量下载 · 失败重试</string>
-    <string name="label_source">源</string>
-    <string name="hint_custom_url">粘贴自定义直链...</string>
+    <string name="title_tv">XCCTV 助手</string>
+    <string name="title_phone">XCCTV 助手</string>
+    <string name="subtitle">增量同步播放源文件</string>
+    <string name="device_tv">TV</string>
+    <string name="device_phone">手机</string>
+    <string name="label_source">源配置</string>
+    <string name="label_storage">存储</string>
+    <string name="label_log">运行日志</string>
+    <string name="hint_custom_url">粘贴自定义直链</string>
     <string name="btn_start">开始下载</string>
     <string name="btn_stop">停止</string>
-    <string name="btn_grant_permission">授权</string>
+    <string name="btn_grant_permission">授权存储</string>
     <string name="btn_permission_granted">已授权</string>
-    <string name="perm_checking">检查权限中...</string>
+    <string name="perm_checking">正在检查存储权限</string>
     <string name="perm_granted">已授权，写入 /sdcard/xcctv</string>
-    <string name="perm_fallback">无全部文件权限，使用应用目录</string>
+    <string name="perm_fallback">无全部文件权限，写入应用目录</string>
     <string name="perm_denied">存储目录不可写，请先授权</string>
-    <string name="banner_start">开始下载源文件</string>
+    <string name="banner_start">正在解析源配置</string>
     <string name="banner_done">下载完成</string>
-    <string name="banner_partial">完成，有失败文件</string>
+    <string name="banner_partial">完成，部分文件失败</string>
     <string name="banner_fail">下载失败</string>
     <string name="banner_cancelled">已停止</string>
-    <string name="banner_progress">%1$d/%2$d  %3$s</string>
+    <string name="banner_progress">%1$d / %2$d    %3$s</string>
     <string name="log_empty_url">源地址不能为空</string>
     <string name="log_all_done">完成，保存至 %1$s</string>
     <string name="log_fail">失败：%1$s</string>
     <string name="log_cancelled">任务已停止</string>
     <string name="boot_launch">开机自启</string>
-    <string name="save_path">保存目录：%1$s</string>
+    <string name="save_path">保存目录  %1$s</string>
 </resources>
