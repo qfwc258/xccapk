@@ -15,7 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.extract_version.outputs.version }}
+      base_version: ${{ steps.extract_version.outputs.version }}
       apk_path: ${{ steps.find_apk.outputs.path }}
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
         run: |
           VER=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle | head -1)
           echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "📦 版本: $VER"
+          echo "📦 基础版本: $VER"
 
       - name: Assemble Release
         run: |
@@ -70,13 +70,38 @@ jobs:
     if: needs.build.result == 'success'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true # 拉取全部远程tag用于判断
+
+      - name: Calculate final tag, avoid duplicate tag
+        id: calc_tag
+        env:
+          BASE_VER: ${{ needs.build.outputs.base_version }}
+        run: |
+          git fetch --tags
+          TAG_BASE="v${BASE_VER}"
+          FINAL_TAG="$TAG_BASE"
+          BUILD_NUM=1
+
+          # 循环检测tag是否存在，存在就追加 +build序号
+          while git rev-parse "refs/tags/$FINAL_TAG" >/dev/null 2>&1; do
+            FINAL_TAG="${TAG_BASE}+build${BUILD_NUM}"
+            BUILD_NUM=$((BUILD_NUM +1))
+          done
+
+          echo "final_tag=$FINAL_TAG" >> $GITHUB_OUTPUT
+          echo "base_version=$BASE_VER" >> $GITHUB_OUTPUT
+          echo "📌 基础版本：$TAG_BASE"
+          echo "🏷️ 最终使用tag：$FINAL_TAG"
 
       - name: Create tag + Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.build.outputs.version }}
+          FINAL_TAG: ${{ steps.calc_tag.outputs.final_tag }}
+          BASE_VERSION: ${{ steps.calc_tag.outputs.base_version }}
         run: |
-          TAG="v${VERSION}"
+          TAG="${FINAL_TAG}"
+          VERSION="${BASE_VERSION}"
           REPO="${GITHUB_REPOSITORY}"
           APK_NAME="XCCTV-TVHelper-${VERSION}-release.apk"
 
@@ -101,15 +126,11 @@ jobs:
 
           # 创建 tag（仅非 tag 触发时）
           if ! [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "⏭️ tag $TAG 已存在"
-            else
-              echo "🏷️ 创建 tag $TAG"
-              git config user.name "github-actions[bot]"
-              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git tag -a "$TAG" -m "Release $VERSION"
-              git push origin "$TAG"
-            fi
+            echo "🏷️ 创建 tag $TAG"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
           fi
 
           # 先尝试删旧 release（如果存在）
@@ -126,7 +147,7 @@ jobs:
           echo "🚀 创建 Release $TAG"
           gh release create "$TAG" \
             --repo "$REPO" \
-            --title "XCCTV TVHelper v${VERSION}" \
+            --title "XCCTV TVHelper ${TAG}" \
             --notes-file /tmp/release_notes.md \
             --target "${GITHUB_SHA}" \
             "./apk_out/${APK_NAME}#${APK_NAME}"
