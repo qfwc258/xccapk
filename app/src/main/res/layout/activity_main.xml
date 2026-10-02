@@ -115,6 +115,37 @@
             android:elevation="1dp"/>
     </LinearLayout>
 
+    <!-- ✅ 权限状态条 + 授权按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_perm_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="检查权限中..."
+            android:textSize="12sp"
+            android:textColor="#94A3B8"
+            android:paddingVertical="6dp"/>
+
+        <Button
+            android:id="@+id/btn_perm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔐 授权"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:background="@drawable/bg_btn_primary"
+            android:paddingVertical="6dp"
+            android:paddingHorizontal="16dp"
+            android:elevation="1dp"/>
+    </LinearLayout>
+
     <!-- 进度条 -->
     <ProgressBar
         android:id="@+id/progress"
