@@ -2,7 +2,6 @@ package com.xcctv.tvhelper
 
 import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -16,7 +15,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
@@ -118,7 +116,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     }
 
     /**
-     * TV 仅设置焦点动画样式，**焦点跳转全部交给 activity_main.xml**
+     * TV 仅设置焦点动画样式，焦点跳转全部交给 activity_main.xml
      */
     private fun setupTvFocusStyle() {
         val focusListener = View.OnFocusChangeListener { v, hasFocus ->
@@ -221,7 +219,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         tvStatus.requestFocus()
 
         lifecycleScope.launch {
-            val result = downloader.downloadSource(url)
+            // ==========【只改这里！】downloadSource → download，适配你原来的下载方法 ==========
+            val result = downloader.download(url)
             btnStart.isEnabled = true
             btnClear.isEnabled = true
             btnPerm.isEnabled = !hasStoragePermission()
