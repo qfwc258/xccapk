@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_page">#0F172A</color>
+    <color name="bg_card">#1E293B</color>
+    <color name="bg_log">#020617</color>
+    <color name="bg_input">#0F172A</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_body">#CBD5E1</color>
+    <color name="text_hint">#64748B</color>
+    <color name="text_input">#E2E8F0</color>
+    <color name="cyan">#22D3EE</color>
+    <color name="purple">#7C3AED</color>
+    <color name="stroke">#334155</color>
+    <color name="stroke_dark">#1E293B</color>
+    <color name="status_ok">#22C55E</color>
+    <color name="status_warn">#FFB74D</color>
+    <color name="banner_fail">#DC2626</color>
+    <color name="progress_bg">#1E293B</color>
+</resources>

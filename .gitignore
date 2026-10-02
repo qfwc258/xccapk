@@ -3,17 +3,14 @@
 build/
 **/build/
 !gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-# IntelliJ / Android Studio
+# IDE
 .idea/
 *.iml
 *.ipr
 *.iws
 .DS_Store
-
-# Kotlin/Eclipse
+.vscode/
 .apt_generated
 .classpath
 .factorypath
@@ -21,19 +18,11 @@ build/
 .settings
 .springBeans
 .sts4-cache
-
-# NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-# VS Code
-.vscode/
 
 # Android
 local.properties
@@ -43,17 +32,10 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Signing —— 签名密钥不要推 GitHub（ZIP 可内置，git 要忽略）
-# 但打包 ZIP 时要保留，故只忽略根目录的和 *.jks
+# Signing
 *.jks
-# *.keystore   <-- 注释掉：ZIP 内置 signing/release.keystore 可用
 signing/your-*.keystore
 keystore.properties
-# gradle.properties 里写了明文密码，强烈建议 git 忽略；但这里先放开方便本地直接用
-# gradle.properties
 
 # OS
 Thumbs.db
-
-# Git LFS (如需追踪大文件 APK 可放开)
-# *.apk filter=lfs diff=lfs merge=lfs -text

@@ -1,3 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">XCCTV助手</string>
+    <string name="title_tv">TV端 XCCTV助手</string>
+    <string name="title_phone">手机端 XCCTV助手</string>
+    <string name="subtitle">源地址解析 · 4线程下载 · /sdcard/xcctv</string>
+    <string name="label_source_url">源地址</string>
+    <string name="hint_source_url">粘贴 vod.json / jsm.json / XYQ.json 直链...</string>
+    <string name="hint_source_url_tv">粘贴 vod.json 直链...</string>
+    <string name="btn_start">开始下载</string>
+    <string name="btn_clear">清空</string>
+    <string name="btn_default_source">默认源</string>
+    <string name="btn_grant_permission">授权</string>
+    <string name="btn_permission_granted">已授权</string>
+    <string name="perm_checking">检查权限中...</string>
+    <string name="perm_granted">已授权 /sdcard 写入</string>
+    <string name="perm_denied">未授予全部文件权限，请先授权</string>
+    <string name="banner_start">开始下载源文件</string>
+    <string name="banner_done">下载完成</string>
+    <string name="banner_fail">下载失败</string>
+    <string name="banner_progress">下载 %1$d/%2$d : %3$s</string>
+    <string name="log_need_permission">必须先授予存储权限</string>
+    <string name="log_empty_url">源地址不能为空</string>
+    <string name="log_all_done">全部文件下载完成，保存至 /sdcard/xcctv</string>
+    <string name="log_fail">失败：%1$s</string>
+    <string name="log_progress_item">[%1$d/%2$d] %3$s</string>
 </resources>

@@ -1,5 +1,6 @@
-# Add project specific ProGuard rules here.
 -keepattributes *Annotation*
 -keep class com.xcctv.tvhelper.** { *; }
--dontwarn io.ktor.**
 -dontwarn kotlinx.coroutines.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn com.google.gson.**
