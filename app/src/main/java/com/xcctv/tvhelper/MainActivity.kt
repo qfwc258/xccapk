@@ -31,16 +31,13 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             "https://gh-proxy.org/https://raw.githubusercontent.com/qfwc258/xccapk/main/tv/vod.json"
     }
 
-    /**
-     * 增强TV设备识别，适配魔百盒、UNT413等国产无Leanback盒子
-     */
     private val isTvDevice: Boolean by lazy {
         val pm = packageManager
         val hasLeanback = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
-        val hasTv = pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+        val hasTvFeature = pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
         val fingerprint = Build.FINGERPRINT.contains("tv", ignoreCase = true)
         val noTouch = !pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
-        hasLeanback || hasTv || fingerprint || noTouch
+        hasLeanback || hasTvFeature || fingerprint || noTouch
     }
 
     private lateinit var prefs: SharedPreferences
@@ -79,7 +76,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         tvBanner = findViewById(R.id.tv_banner)
         tvBanner.visibility = View.GONE
 
-        val deviceLabel = if (isTvDevice) "📺 TV端" else "📱 手机端"
+        val deviceLabel = if (isTvDevice) "📺 TV端" else "📱手机端"
         tvTitle.text = "$deviceLabel XCCTV助手"
         tvSubtitle.text = "源地址解析 · 4线程下载 · /sdcard/xcctv"
 
@@ -89,15 +86,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
         refreshPermStatus()
 
-        // TV端额外开启焦点标记（焦点顺序在xml定义，kt不再写nextFocus代码）
         if (isTvDevice) {
-            setupTvFocusStyle()
+            setupTvFocusAnim()
         }
 
         tvStatus.movementMethod = ScrollingMovementMethod()
         progress.visibility = View.GONE
 
-        downloader = XcctvSourceDownloader(this)
+        downloader = XcctvSourceDownloader(this, concurrency = 2)
 
         btnStart.setOnClickListener { startDownload() }
 
@@ -114,13 +110,10 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             etUrl.requestFocus()
         }
 
-        btnPerm.setOnClickListener { requestStoragePermission() }
+        btnPerm.setOnClickListener { requestStoragePerm() }
     }
 
-    /**
-     * TV 仅设置焦点动画样式，焦点跳转全部交给 activity_main.xml
-     */
-    private fun setupTvFocusStyle() {
+    private fun setupTvFocusAnim() {
         val focusListener = View.OnFocusChangeListener { v, hasFocus ->
             if (hasFocus) {
                 v.scaleX = 1.1f
@@ -132,10 +125,10 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
         etUrl.onFocusChangeListener = focusListener
         btnStart.onFocusChangeListener = focusListener
-        tvStatus.onFocusChangeListener = focusListener
-        btnPerm.onFocusChangeListener = focusListener
         btnClear.onFocusChangeListener = focusListener
         btnFolder.onFocusChangeListener = focusListener
+        btnPerm.onFocusChangeListener = focusListener
+        tvStatus.onFocusChangeListener = focusListener
     }
 
     private fun refreshPermStatus() {
@@ -143,15 +136,15 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         if (ok) {
             tvPermStatus.text = "✅ 已授权 /sdcard 写入"
             tvPermStatus.setTextColor(0xFF22C55E.toInt())
-            btnPerm.text = "✓ 已授权"
+            btnPerm.text = "✓已授权"
             btnPerm.isEnabled = false
             btnStart.isEnabled = true
         } else {
-            tvPermStatus.text = "⚠️ 未授权存储权限 → 点按钮授权"
-            tvPermStatus.setTextColor(0xFFF59E0B.toInt())
-            btnPerm.text = "🔐 授权"
+            tvPermStatus.text = "⚠️未授予全部文件权限 → 点按钮授权"
+            tvPermStatus.setTextColor(0xFFFFB74D.toInt())
+            btnPerm.text = "🔐授权"
             btnPerm.isEnabled = true
-            btnStart.isEnabled = true
+            btnStart.isEnabled = false
         }
     }
 
@@ -163,7 +156,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
     }
 
-    private fun requestStoragePermission() {
+    private fun requestStoragePerm() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
             intent.data = Uri.parse("package:$packageName")
@@ -192,14 +185,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     private fun startDownload() {
         if (!hasStoragePermission()) {
-            tvStatus.append("\n🚫 需要先授予存储权限！")
+            tvStatus.append("\n🚫必须先授予存储权限！")
             scrollBottom()
-            requestStoragePermission()
             return
         }
         val url = etUrl.text.toString().trim()
         if (url.isEmpty()) {
-            tvStatus.append("\n⚠️ 源地址不能为空")
+            tvStatus.append("\n⚠️源地址不能为空！")
+            scrollBottom()
             return
         }
         prefs.edit().putString(KEY_LAST_URL, url).apply()
@@ -210,31 +203,29 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         progress.visibility = View.VISIBLE
         tvStatus.text = ""
 
-        totalCount = 0
         doneCount = 0
+        totalCount = 0
         tvBanner.visibility = View.VISIBLE
         tvBanner.setBackgroundColor(0xFF0284C7.toInt())
-        tvBanner.text = "⏳ 开始下载源文件"
+        tvBanner.text = "⏳开始下载源文件"
 
         scrollBottom()
-        // 下载启动后焦点切到日志框
-        tvStatus.requestFocus()
 
         lifecycleScope.launch {
-            // ====================== 重点：换回你原来的函数名 downloadSource ======================
-            val result = downloader.downloadSource(url)
+            // ============ 【正确调用！！】run() 函数，并发写死2 ============
+            val result = downloader.run(url)
             btnStart.isEnabled = true
             btnClear.isEnabled = true
             btnPerm.isEnabled = !hasStoragePermission()
             progress.visibility = View.GONE
             if (result.isSuccess) {
                 tvBanner.setBackgroundColor(0xFF16A34A.toInt())
-                tvBanner.text = "✅ 下载完成，共 $doneCount 个文件"
-                tvStatus.append("\n🎉 全部资源下载到 /sdcard/xcctv")
+                tvBanner.text = "✅下载完成"
+                tvStatus.append("\n🎉全部文件下载完成，保存至 /sdcard/xcctv")
             } else {
                 tvBanner.setBackgroundColor(0xFFDC2626.toInt())
-                tvBanner.text = "❌ 下载失败"
-                tvStatus.append("\n❌ ${result.exceptionOrNull()?.message}")
+                tvBanner.text = "❌下载失败"
+                tvStatus.append("\n💥失败：${result.exceptionOrNull()?.message}")
             }
             scrollBottom()
         }
@@ -246,12 +237,13 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
     }
 
-    override fun onProgress(current: Int, total: Int, fileName: String) {
+    // ========== 实现 DownloadProgressListener 回调（和你下载器接口完全对应） ==========
+    override fun onProgress(current: Int, total: Int, file: String) {
         runOnUiThread {
             doneCount = current
             totalCount = total
-            tvBanner.text = "⏳ 下载中 $current / $total"
-            tvStatus.append("\n[$current/$total] $fileName")
+            tvBanner.text = "⏳下载 $current/$total : $file"
+            tvStatus.append("\n[$current/$total] $file")
             scrollBottom()
         }
     }
