@@ -64,6 +64,27 @@ jobs:
           path: ${{ steps.find_apk.outputs.path }}
           retention-days: 30
 
+      # ========== 新增：打包源码压缩包，剔除 tv 文件夹 ==========
+      - name: Package source zip (exclude tv folder)
+        id: package_src
+        run: |
+          VER="${{ steps.extract_version.outputs.version }}"
+          SRC_NAME="XCCTV-TVHelper-src-${VER}.zip"
+          zip -r "${SRC_NAME}" . \
+            -x "tv/**/*" \
+            -x ".git/**/*" \
+            -x ".gradle/**/*" \
+            -x "app/build/**/*"
+          echo "src_zip=${SRC_NAME}" >> "$GITHUB_OUTPUT"
+          ls -lh "${SRC_NAME}"
+
+      - name: Upload Source Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XCCTV-TVHelper-source
+          path: ${{ steps.package_src.outputs.src_zip }}
+          retention-days: 30
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -94,6 +115,22 @@ jobs:
           echo "📌 基础版本：$TAG_BASE"
           echo "🏷️ 最终使用tag：$FINAL_TAG"
 
+      - name: Download artifacts (APK + Source Zip)
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p ./release_out
+          gh run download "${RUN_ID}" \
+            --repo "$REPO" \
+            --name "XCCTV-TVHelper-release" \
+            --dir ./release_out
+          gh run download "${RUN_ID}" \
+            --repo "$REPO" \
+            --name "XCCTV-TVHelper-source" \
+            --dir ./release_out
+          ls -lh ./release_out
+
       - name: Create tag + Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,24 +142,20 @@ jobs:
           REPO="${GITHUB_REPOSITORY}"
           APK_NAME="XCCTV-TVHelper-${VERSION}-release.apk"
 
-          echo "📥 下载 APK artifact..."
-          mkdir -p ./apk_out
-          gh run download "${GITHUB_RUN_ID}" \
-            --repo "$REPO" \
-            --name "XCCTV-TVHelper-release" \
-            --dir ./apk_out || { echo "❌ 下载 artifact 失败"; exit 1; }
-
-          APK=$(find ./apk_out -name '*.apk' -type f | head -1)
+          APK=$(find ./release_out -name '*.apk' -type f | head -1)
+          SRC_ZIP=$(find ./release_out -name '*src-*.zip' -type f | head -1)
           [ -f "$APK" ] || { echo "❌ APK 不存在"; exit 1; }
+          [ -f "$SRC_ZIP" ] || { echo "❌ Source Zip 不存在"; exit 1; }
 
           # 如果文件名不同才重命名（避免 cp 同文件报错）
           if [ "$(basename "$APK")" != "$APK_NAME" ]; then
-            mv "$APK" "./apk_out/${APK_NAME}"
+            mv "$APK" "./release_out/${APK_NAME}"
           fi
-          APK_FINAL="./apk_out/${APK_NAME}"
+          APK_FINAL="./release_out/${APK_NAME}"
           APK_SIZE=$(du -h "$APK_FINAL" | cut -f1)
           SHA256=$(sha256sum "$APK_FINAL" | cut -d' ' -f1)
           echo "📦 APK: $APK_NAME ($APK_SIZE, SHA256=$SHA256)"
+          echo "📦 Source: $(basename "$SRC_ZIP")"
 
           # 创建 tag（仅非 tag 触发时）
           if ! [[ "$GITHUB_REF" == refs/tags/* ]]; then
@@ -150,7 +183,8 @@ jobs:
             --title "XCCTV TVHelper ${TAG}" \
             --notes-file /tmp/release_notes.md \
             --target "${GITHUB_SHA}" \
-            "./apk_out/${APK_NAME}#${APK_NAME}"
+            "./release_out/${APK_NAME}#${APK_NAME}" \
+            "${SRC_ZIP}#$(basename ${SRC_ZIP})"
 
           echo "✅ Release $TAG 发布完成"
           echo "🔗 https://github.com/$REPO/releases/tag/$TAG"
