@@ -1,5 +1,7 @@
 {"urls": [
 {"name": "盒子迷", "url": "https://盒子迷.top/禁止贩卖"},
+{"name": "本地vod（影视)", "url": "file://xcctv/vod.json"},
+{"name": "本地vod（tvbox)", "url": "clan://localhost/xcctv/vod.json"},
 {"name": "Jsnzkpg", "url": "https://gh-proxy.org/https://raw.githubusercontent.com/Jsnzkpg/Jsnzkpg/Jsnzkpg/Jsnzkpg"},
 {"name": "mafly", "url": "https://gh-proxy.org/https://raw.githubusercontent.com/mhmdxahmd/mafly/refs/heads/main/MAfly1/mafly2"},
 {"name": "刷新", "url": "https://gh-proxy.org/https://raw.githubusercontent.com/qfwc258/xccapk/main/tv/dx.json"},
