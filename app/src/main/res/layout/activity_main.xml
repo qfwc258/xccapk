@@ -76,7 +76,8 @@
             android:textColorHint="#64748B"
             android:background="@drawable/bg_input"
             android:padding="12dp"
-            android:textCursorDrawable="@null"/>
+            android:textCursorDrawable="@null"
+            android:nextFocusDown="@id/btn_start"/>
     </LinearLayout>
 
     <!-- 按钮行 -->
@@ -98,7 +99,9 @@
             android:background="@drawable/bg_btn_primary"
             android:paddingVertical="12dp"
             android:paddingHorizontal="4dp"
-            android:elevation="2dp"/>
+            android:elevation="2dp"
+            android:nextFocusUp="@id/et_url"
+            android:nextFocusDown="@id/tv_status"/>
 
         <Button
             android:id="@+id/btn_clear"
@@ -112,7 +115,10 @@
             android:paddingVertical="12dp"
             android:paddingHorizontal="4dp"
             android:layout_marginStart="8dp"
-            android:elevation="1dp"/>
+            android:elevation="1dp"
+            android:nextFocusUp="@id/btn_perm"
+            android:nextFocusRight="@id/btn_folder"
+            android:nextFocusDown="@id/btn_folder"/>
 
         <Button
             android:id="@+id/btn_folder"
@@ -126,7 +132,9 @@
             android:paddingVertical="12dp"
             android:paddingHorizontal="4dp"
             android:layout_marginStart="8dp"
-            android:elevation="1dp"/>
+            android:elevation="1dp"
+            android:nextFocusLeft="@id/btn_clear"
+            android:nextFocusUp="@id/btn_perm"/>
     </LinearLayout>
 
     <!-- ✅ 权限状态条 + 授权按钮 -->
@@ -157,7 +165,9 @@
             android:background="@drawable/bg_btn_primary"
             android:paddingVertical="6dp"
             android:paddingHorizontal="16dp"
-            android:elevation="1dp"/>
+            android:elevation="1dp"
+            android:nextFocusUp="@id/tv_status"
+            android:nextFocusDown="@id/btn_clear"/>
     </LinearLayout>
 
     <!-- 进度条 -->
@@ -186,5 +196,9 @@
         android:background="@drawable/bg_log"
         android:fontFamily="monospace"
         android:scrollbars="vertical"
-        android:textIsSelectable="true"/>
+        android:textIsSelectable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:nextFocusUp="@id/btn_start"
+        android:nextFocusDown="@id/btn_perm"/>
 </LinearLayout>
