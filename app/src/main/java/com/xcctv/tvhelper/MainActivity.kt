@@ -21,7 +21,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     }
 
     private lateinit var downloader: XcctvSourceDownloader
-    private lateinit var httpServer: XcctvHttpServer
     private lateinit var etUrl: EditText
     private lateinit var tvStatus: TextView
     private lateinit var btnStart: Button
@@ -41,19 +40,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
 
         downloader = XcctvSourceDownloader(applicationContext, this)
-        httpServer = XcctvHttpServer(downloader.rootDir)
         val deviceTag = if (isTvDevice) "📺 电视端" else "📱 手机端"
-        var startOk = false
-        try {
-            httpServer.start()
-            startOk = true
-        } catch (_: Exception) { /* 端口被占用等 */ }
-        val serverMsg = if (startOk) {
-            "✅HTTP服务已启动:127.0.0.1:7890\nTVBox: clan://localhost/xcctv/vod.json\nFongMi: file://xcctv/vod.json"
-        } else {
-            "⚠️HTTP服务启动失败（端口可能被占用）"
-        }
-        tvStatus.text = "$deviceTag\n$serverMsg"
+        tvStatus.text = "$deviceTag\n✅就绪\n粘贴源地址 → 开始下载\n下载完成后可在 TVBox/FongMi 中使用"
 
         btnStart.setOnClickListener {
             val url = etUrl.text.toString().trim()
@@ -98,11 +86,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnClear.minHeight = (48 * scale).toInt()
         etUrl.textSize = 16f
         tvStatus.textSize = 16f
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        httpServer.stop()
     }
 
     override fun onProgress(current: Int, total: Int, file: String) {
