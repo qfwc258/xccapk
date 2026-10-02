@@ -218,7 +218,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         if (requestCode == REQ_PERM) refreshPermStatus()
     }
 
-    // ========== TV 遥控器焦点 ==========
+    // ========== TV 遥控器焦点【修复完整版】 ==========
     private fun setupTvFocus() {
         val scale = resources.displayMetrics.density
 
@@ -227,19 +227,28 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnClear.isFocusable = true
         btnFolder.isFocusable = true
         btnPerm.isFocusable = true
+        tvStatus.isFocusable = true
+        tvStatus.isFocusableInTouchMode = false
 
-        // 焦点方向链
+        // ========== 完整闭环焦点导航链 ==========
         etUrl.nextFocusDownId = R.id.btn_start
-        btnStart.nextFocusUpId = R.id.et_url
-        btnStart.nextFocusDownId = R.id.btn_perm
-        btnPerm.nextFocusUpId = R.id.btn_start
-        btnPerm.nextFocusDownId = R.id.btn_clear
-        btnClear.nextFocusUpId = R.id.btn_perm
-        btnClear.nextFocusRightId = R.id.btn_folder
-        btnFolder.nextFocusLeftId = R.id.btn_clear
-        btnFolder.nextFocusUpId = R.id.btn_start
 
-        // ✅ 给每个按钮应用 TV 焦点 selector + 放大动效 + 运行时文字颜色兜底
+        btnStart.nextFocusUpId = R.id.etUrl
+        btnStart.nextFocusDownId = R.id.tvStatus
+
+        tvStatus.nextFocusUpId = R.id.btnStart
+        tvStatus.nextFocusDownId = R.id.btnPerm
+
+        btnPerm.nextFocusUpId = R.id.tvStatus
+        btnPerm.nextFocusDownId = R.id.btnClear
+
+        btnClear.nextFocusUpId = R.id.btnPerm
+        btnClear.nextFocusRightId = R.id.btnFolder
+        btnClear.nextFocusDownId = R.id.btnFolder
+
+        btnFolder.nextFocusLeftId = R.id.btnClear
+        btnFolder.nextFocusUpId = R.id.btnPerm
+
         val FOCUS_TEXT_COLOR = 0xFFFFFFFF.toInt()   // 焦点时：纯白
         val NORMAL_TEXT_COLOR = 0xFFE2E8F0.toInt()  // 普通时：浅灰蓝
 
@@ -252,7 +261,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             (v as? Button)?.textSize = textSp
             v.minimumHeight = (minHeightDp * scale).toInt()
             v.setBackgroundResource(focusBgRes)
-            // 默认文字颜色
             (v as? Button)?.setTextColor(NORMAL_TEXT_COLOR)
 
             v.setOnFocusChangeListener { view, has ->
@@ -262,7 +270,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                     .translationZ(if (has) 8f * scale else 0f)
                     .setDuration(180)
 
-                // ✅ 三重兜底：selector 背景 + activated 状态 + 运行时文字颜色
                 view.isActivated = has
                 if (view is Button) {
                     view.setTextColor(if (has) FOCUS_TEXT_COLOR else NORMAL_TEXT_COLOR)
@@ -306,7 +313,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         return false
     }
 
-    // ========== 下载 ==========
+    // ========== 下载【修复：开始下载自动切焦点到日志】 ==========
     private fun startDownload() {
         if (!hasStoragePerm()) {
             tvStatus.append("\n🚫 请先授权 /sdcard 写权限（点上方 🔐 授权按钮）")
@@ -334,6 +341,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         tvBanner.text = "⏳ 下载中..."
 
         scrollToBottom()
+        // 核心修复：启动下载后自动将焦点切换到日志区域
+        tvStatus.requestFocus()
 
         lifecycleScope.launch {
             val ret = downloader.run(url)
