@@ -1,5 +1,6 @@
 package com.xcctv.tvhelper
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -47,6 +48,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var etUrl: EditText
     private lateinit var customRow: View
     private lateinit var btnClear: Button
+    private lateinit var btnPaste: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvPermStatus: TextView
     private lateinit var tvBanner: TextView
@@ -63,7 +65,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private var spSource: Spinner? = null
     private var tileVod: TextView? = null
     private var tileJsm: TextView? = null
-    private var tileCustom: TextView? = null
 
     private val logLines = ArrayDeque<String>()
     private var downloading = false
@@ -102,7 +103,11 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnStart.setOnClickListener { startDownload() }
         btnStop.setOnClickListener { stopDownload() }
         btnPerm.setOnClickListener { requestStoragePerm() }
-        btnClear.setOnClickListener { clearCustomUrl() }
+        btnClear.setOnClickListener { clearCurrentUrl() }
+        btnPaste.setOnClickListener { pasteUrl() }
+        etUrl.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) persistCurrentUrl()
+        }
         cbBoot.isChecked = prefs.getBoolean(AppConstants.KEY_BOOT_LAUNCH, false)
         cbBoot.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putBoolean(AppConstants.KEY_BOOT_LAUNCH, checked).apply()
@@ -115,6 +120,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         etUrl = findViewById(R.id.et_url)
         customRow = findViewById(R.id.custom_row)
         btnClear = findViewById(R.id.btn_clear)
+        btnPaste = findViewById(R.id.btn_paste)
         tvStatus = findViewById(R.id.tv_status)
         tvPermStatus = findViewById(R.id.tv_perm_status)
         tvSavePath = findViewById(R.id.tv_save_path)
@@ -130,7 +136,6 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         spSource = findViewById<View>(R.id.sp_source) as? Spinner
         tileVod = findViewById<View>(R.id.tile_vod) as? TextView
         tileJsm = findViewById<View>(R.id.tile_jsm) as? TextView
-        tileCustom = findViewById<View>(R.id.tile_custom) as? TextView
     }
 
     private fun setupSourceSpinner() {
@@ -153,32 +158,39 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private fun setupSourceTiles() {
         tileVod?.setOnClickListener { selectSource(0) }
         tileJsm?.setOnClickListener { selectSource(1) }
-        tileCustom?.setOnClickListener { selectSource(AppConstants.INDEX_CUSTOM) }
     }
 
     private fun restoreSourceSelection() {
         if (prefs.contains(AppConstants.KEY_SOURCE_INDEX)) {
-            sourceIndex = prefs.getInt(AppConstants.KEY_SOURCE_INDEX, 0)
-                .coerceIn(0, AppConstants.SOURCE_PRESETS.lastIndex)
-            etUrl.setText(prefs.getString(AppConstants.KEY_CUSTOM_URL, "") ?: "")
+            val raw = prefs.getInt(AppConstants.KEY_SOURCE_INDEX, 0)
+            sourceIndex = if (raw in 0..AppConstants.SOURCE_PRESETS.lastIndex) raw else 0
+            migrateLegacyCustomUrl()
+            prefs.edit().putInt(AppConstants.KEY_SOURCE_INDEX, sourceIndex).apply()
             return
         }
         val last = prefs.getString(AppConstants.KEY_LAST_URL, null)
             ?: AppConstants.DEFAULT_SOURCE_URL
-        val match = AppConstants.SOURCE_PRESETS.indexOfFirst { it.url.isNotEmpty() && it.url == last }
-        if (match >= 0) {
-            sourceIndex = match
-            etUrl.setText("")
-        } else {
-            sourceIndex = AppConstants.INDEX_CUSTOM
-            etUrl.setText(last)
-            prefs.edit().putString(AppConstants.KEY_CUSTOM_URL, last).apply()
+        val match = AppConstants.SOURCE_PRESETS.indexOfFirst { it.url == last }
+        sourceIndex = if (match >= 0) match else 0
+        if (match < 0 && last.isNotEmpty()) {
+            prefs.edit().putString(AppConstants.urlKey(sourceIndex), last).apply()
         }
         prefs.edit().putInt(AppConstants.KEY_SOURCE_INDEX, sourceIndex).apply()
     }
 
+    private fun migrateLegacyCustomUrl() {
+        val legacy = prefs.getString("custom_source_url", null)?.trim().orEmpty()
+        if (legacy.isEmpty()) return
+        val key = AppConstants.urlKey(sourceIndex)
+        if (prefs.getString(key, null).isNullOrBlank()) {
+            prefs.edit().putString(key, legacy).remove("custom_source_url").apply()
+        } else {
+            prefs.edit().remove("custom_source_url").apply()
+        }
+    }
+
     private fun selectSource(index: Int) {
-        persistCustomUrl()
+        persistCurrentUrl()
         sourceIndex = index.coerceIn(0, AppConstants.SOURCE_PRESETS.lastIndex)
         prefs.edit().putInt(AppConstants.KEY_SOURCE_INDEX, sourceIndex).apply()
         if (spSource?.selectedItemPosition != sourceIndex) {
@@ -190,14 +202,17 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     }
 
     private fun applySourceUi() {
-        val custom = sourceIndex == AppConstants.INDEX_CUSTOM
-        customRow.visibility = if (custom) View.VISIBLE else View.GONE
-        if (custom) {
-            etUrl.setText(prefs.getString(AppConstants.KEY_CUSTOM_URL, "") ?: "")
-        }
+        customRow.visibility = View.VISIBLE
+        etUrl.setText(resolvedUrl(sourceIndex))
         styleTile(tileVod, sourceIndex == 0)
         styleTile(tileJsm, sourceIndex == 1)
-        styleTile(tileCustom, custom)
+    }
+
+    private fun resolvedUrl(index: Int): String {
+        val preset = AppConstants.SOURCE_PRESETS.getOrNull(index)
+            ?: return AppConstants.DEFAULT_SOURCE_URL
+        val saved = prefs.getString(AppConstants.urlKey(index), null)
+        return if (saved.isNullOrBlank()) preset.url else saved
     }
 
     private fun styleTile(tile: TextView?, selected: Boolean) {
@@ -210,25 +225,53 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         )
     }
 
-    private fun persistCustomUrl() {
-        if (sourceIndex == AppConstants.INDEX_CUSTOM) {
-            prefs.edit().putString(AppConstants.KEY_CUSTOM_URL, etUrl.text.toString()).apply()
+    private fun persistCurrentUrl() {
+        val typed = etUrl.text.toString().trim()
+        val preset = AppConstants.SOURCE_PRESETS.getOrNull(sourceIndex) ?: return
+        val key = AppConstants.urlKey(sourceIndex)
+        if (typed.isEmpty() || typed == preset.url) {
+            prefs.edit().remove(key).apply()
+        } else {
+            prefs.edit().putString(key, typed).apply()
         }
     }
 
-    private fun clearCustomUrl() {
-        etUrl.setText("")
-        prefs.edit().putString(AppConstants.KEY_CUSTOM_URL, "").apply()
+    private fun clearCurrentUrl() {
+        val preset = AppConstants.SOURCE_PRESETS.getOrNull(sourceIndex) ?: return
+        prefs.edit().remove(AppConstants.urlKey(sourceIndex)).apply()
+        etUrl.setText(preset.url)
+        etUrl.requestFocus()
+        if (isTvDevice) enterCustomEdit()
+    }
+
+    private fun pasteUrl() {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = cm.primaryClip
+        val text = if (clip != null && clip.itemCount > 0) {
+            clip.getItemAt(0).coerceToText(this).toString().trim()
+        } else {
+            ""
+        }
+        if (text.isEmpty()) {
+            appendLog(getString(R.string.log_paste_empty))
+            return
+        }
+        etUrl.setText(text)
+        persistCurrentUrl()
+        appendLog(getString(R.string.log_paste_ok))
         etUrl.requestFocus()
         if (isTvDevice) enterCustomEdit()
     }
 
     private fun currentSourceUrl(): String {
-        val preset = AppConstants.SOURCE_PRESETS.getOrNull(sourceIndex)
-        return if (preset == null || preset.url.isEmpty()) {
-            etUrl.text.toString().trim()
-        } else {
-            preset.url
+        val typed = etUrl.text.toString().trim()
+        return typed.ifEmpty { resolvedUrl(sourceIndex) }
+    }
+
+    private fun focusCurrentTile() {
+        when (sourceIndex) {
+            1 -> tileJsm?.requestFocus()
+            else -> tileVod?.requestFocus()
         }
     }
 
@@ -252,7 +295,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             if (editingCustom) {
                 if (keyCode == KeyEvent.KEYCODE_BACK) {
                     exitCustomEdit()
-                    tileCustom?.requestFocus()
+                    focusCurrentTile()
                     true
                 } else {
                     false
@@ -264,7 +307,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                         true
                     }
                     KeyEvent.KEYCODE_BACK -> {
-                        tileCustom?.requestFocus()
+                        focusCurrentTile()
                         true
                     }
                     else -> handleTvKey(keyCode)
@@ -290,7 +333,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             }
         }
         listOfNotNull(
-            tileVod, tileJsm, tileCustom, btnClear, btnStart, btnStop, btnPerm, cbBoot
+            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm, cbBoot
         ).forEach { view ->
             view.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -312,7 +355,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     private fun exitCustomEdit() {
         editingCustom = false
-        persistCustomUrl()
+        persistCurrentUrl()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(etUrl.windowToken, 0)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -327,11 +370,9 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             rows.add(listOf<View>(cbBoot))
             return rows
         }
-        val tiles = listOfNotNull<View>(tileVod, tileJsm, tileCustom)
+        val tiles = listOfNotNull<View>(tileVod, tileJsm)
         if (tiles.isNotEmpty()) rows.add(tiles)
-        if (customRow.visibility == View.VISIBLE) {
-            rows.add(listOf<View>(etUrl, btnClear))
-        }
+        rows.add(listOf<View>(etUrl, btnPaste, btnClear))
         if (btnStart.isEnabled) rows.add(listOf<View>(btnStart))
         val bottom = mutableListOf<View>()
         if (btnPerm.isEnabled) bottom.add(btnPerm)
@@ -392,7 +433,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (editingCustom) {
                 exitCustomEdit()
-                tileCustom?.requestFocus()
+                focusCurrentTile()
                 return true
             }
             if (currentFocus == tvStatus) {
@@ -408,6 +449,11 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         val delta = (tvStatus.height / 3).coerceAtLeast(48)
         val next = (tvStatus.scrollY + if (down) delta else -delta).coerceAtLeast(0)
         tvStatus.scrollTo(0, next)
+    }
+
+    override fun onPause() {
+        persistCurrentUrl()
+        super.onPause()
     }
 
     override fun onResume() {
@@ -494,21 +540,21 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         spSource?.isEnabled = enabled
         tileVod?.isEnabled = enabled
         tileJsm?.isEnabled = enabled
-        tileCustom?.isEnabled = enabled
         etUrl.isEnabled = enabled
+        btnPaste.isEnabled = enabled
         btnClear.isEnabled = enabled
-        listOfNotNull(tileVod, tileJsm, tileCustom).forEach {
+        listOfNotNull(tileVod, tileJsm).forEach {
             it.isFocusable = enabled
             it.isClickable = enabled
         }
     }
 
     private fun startDownload() {
-        persistCustomUrl()
+        persistCurrentUrl()
         val url = currentSourceUrl()
         if (url.isEmpty()) {
             appendLog(getString(R.string.log_empty_url))
-            if (sourceIndex == AppConstants.INDEX_CUSTOM) etUrl.requestFocus()
+            etUrl.requestFocus()
             return
         }
         val root = resolveRootDir(this)

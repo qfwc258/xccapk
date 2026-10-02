@@ -99,7 +99,7 @@
                 android:clickable="true"
                 android:contentDescription="@string/cd_source_vod"
                 android:nextFocusRight="@id/tile_jsm"
-                android:nextFocusDown="@id/btn_start"/>
+                android:nextFocusDown="@id/et_url"/>
 
             <TextView
                 android:id="@+id/tile_jsm"
@@ -117,25 +117,6 @@
                 android:clickable="true"
                 android:contentDescription="@string/cd_source_jsm"
                 android:nextFocusLeft="@id/tile_vod"
-                android:nextFocusRight="@id/tile_custom"
-                android:nextFocusDown="@id/btn_start"/>
-
-            <TextView
-                android:id="@+id/tile_custom"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:layout_marginStart="10dp"
-                android:gravity="center"
-                android:text="@string/source_custom"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:background="@drawable/bg_source_tile"
-                android:focusable="true"
-                android:clickable="true"
-                android:contentDescription="@string/cd_source_custom"
-                android:nextFocusLeft="@id/tile_jsm"
                 android:nextFocusDown="@id/et_url"/>
         </LinearLayout>
 
@@ -145,8 +126,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:visibility="gone">
+            android:gravity="center_vertical">
 
             <EditText
                 android:id="@+id/et_url"
@@ -164,9 +144,27 @@
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
                 android:textCursorDrawable="@null"
+                android:nextFocusRight="@id/btn_paste"
+                android:nextFocusDown="@id/btn_start"
+                android:nextFocusUp="@id/tile_vod"/>
+
+            <Button
+                android:id="@+id/btn_paste"
+                android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:minWidth="88dp"
+                android:layout_marginStart="10dp"
+                android:text="@string/btn_paste"
+                android:textColor="@color/btn_ghost_text"
+                android:textSize="15sp"
+                android:background="@drawable/bg_btn_ghost_tv"
+                android:stateListAnimator="@null"
+                android:textAllCaps="false"
+                android:contentDescription="@string/cd_paste"
+                android:nextFocusLeft="@id/et_url"
                 android:nextFocusRight="@id/btn_clear"
                 android:nextFocusDown="@id/btn_start"
-                android:nextFocusUp="@id/tile_custom"/>
+                android:nextFocusUp="@id/tile_jsm"/>
 
             <Button
                 android:id="@+id/btn_clear"
@@ -181,8 +179,9 @@
                 android:stateListAnimator="@null"
                 android:textAllCaps="false"
                 android:contentDescription="@string/cd_clear"
-                android:nextFocusLeft="@id/et_url"
-                android:nextFocusDown="@id/btn_start"/>
+                android:nextFocusLeft="@id/btn_paste"
+                android:nextFocusDown="@id/btn_start"
+                android:nextFocusUp="@id/tile_jsm"/>
         </LinearLayout>
     </LinearLayout>
 
@@ -216,7 +215,7 @@
         android:background="@drawable/bg_btn_primary_tv"
         android:stateListAnimator="@null"
         android:textAllCaps="false"
-        android:nextFocusUp="@id/tile_vod"
+        android:nextFocusUp="@id/et_url"
         android:nextFocusDown="@id/btn_stop"/>
 
     <Button
