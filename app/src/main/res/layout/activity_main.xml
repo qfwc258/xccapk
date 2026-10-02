@@ -165,6 +165,19 @@
             android:nextFocusDown="@id/btn_clear"/>
     </LinearLayout>
 
+    <CheckBox
+        android:id="@+id/cb_boot"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/boot_launch"
+        android:textColor="@color/text_body"
+        android:textSize="13sp"
+        android:buttonTint="@color/cyan"
+        android:checked="false"
+        android:nextFocusUp="@id/btn_perm"
+        android:nextFocusDown="@id/tv_status"/>
+
     <ProgressBar
         android:id="@+id/progress"
         style="?android:attr/progressBarStyleHorizontal"

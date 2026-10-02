@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.text.method.ScrollingMovementMethod
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -44,6 +45,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var btnClear: Button
     private lateinit var btnFolder: Button
     private lateinit var btnPerm: Button
+    private lateinit var cbBoot: CheckBox
     private lateinit var progress: ProgressBar
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
@@ -82,6 +84,10 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             etUrl.requestFocus()
         }
         btnPerm.setOnClickListener { requestStoragePerm() }
+        cbBoot.isChecked = prefs.getBoolean(AppConstants.KEY_BOOT_LAUNCH, false)
+        cbBoot.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(AppConstants.KEY_BOOT_LAUNCH, checked).apply()
+        }
     }
 
     private fun bindViews() {
@@ -92,6 +98,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnClear = findViewById(R.id.btn_clear)
         btnFolder = findViewById(R.id.btn_folder)
         btnPerm = findViewById(R.id.btn_perm)
+        cbBoot = findViewById(R.id.cb_boot)
         progress = findViewById(R.id.progress)
         tvTitle = findViewById(R.id.tv_title)
         tvSubtitle = findViewById(R.id.tv_subtitle)
@@ -103,7 +110,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             val scale = if (hasFocus) FOCUS_SCALE else 1.0f
             v.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
         }
-        listOf(etUrl, btnStart, btnClear, btnFolder, btnPerm, tvStatus).forEach {
+        listOf(etUrl, btnStart, btnClear, btnFolder, btnPerm, cbBoot, tvStatus).forEach {
             it.onFocusChangeListener = focusListener
         }
     }

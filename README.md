@@ -10,7 +10,7 @@ app/                 Android 应用
     MainActivity.kt            主界面
     XcctvSourceDownloader.kt   源配置解析与并行下载
     XcctvProvider.kt           file://xcctv/ ContentProvider
-    BootReceiver.kt            开机拉起
+    BootReceiver.kt            开机自启（默认关闭）
     AppConstants.kt            常量
     StoragePaths.kt            本地目录
 signing/             Release 签名
@@ -25,6 +25,7 @@ tv/                  同步自 qist/tvbox 的源配置（构建 APK 时不参与
 - 4 线程并行下载，JSON / JS / PY 嵌套相对路径循环扫描
 - 固定写入 `/sdcard/xcctv`（需全部文件访问权限）
 - `file://xcctv/vod.json` 给 TVBox / FongMi 使用
+- 开机自启开关，默认关闭
 
 ## 使用
 

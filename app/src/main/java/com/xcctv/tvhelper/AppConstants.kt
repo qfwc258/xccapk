@@ -3,6 +3,7 @@ package com.xcctv.tvhelper
 object AppConstants {
     const val PREFS_NAME = "xcctv_prefs"
     const val KEY_LAST_URL = "last_source_url"
+    const val KEY_BOOT_LAUNCH = "boot_launch_enabled"
     const val ROOT_DIR = "/sdcard/xcctv"
     const val DOWNLOAD_CONCURRENCY = 4
     const val MAX_SCAN_ROUNDS = 20

@@ -152,8 +152,21 @@
                 android:paddingVertical="10dp"
                 android:paddingHorizontal="20dp"
                 android:nextFocusUp="@id/btn_clear"
-                android:nextFocusDown="@id/tv_status"/>
+                android:nextFocusDown="@id/cb_boot"/>
         </LinearLayout>
+
+        <CheckBox
+            android:id="@+id/cb_boot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/boot_launch"
+            android:textColor="@color/text_body"
+            android:textSize="14sp"
+            android:buttonTint="@color/cyan"
+            android:checked="false"
+            android:nextFocusUp="@id/btn_perm"
+            android:nextFocusDown="@id/tv_status"/>
 
         <ProgressBar
             android:id="@+id/progress"
