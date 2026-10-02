@@ -18,11 +18,32 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
-/** 统一计算外部存储根目录：固定 /sdcard/xcctv */
+/**
+ * 外部存储根目录选择：依次探测以下位置
+ *   1. /sdcard/xcctv（用户期望路径，直观）
+ *   2. /storage/emulated/0/xcctv（等价别名）
+ *   3. Environment.DIRECTORY_DOWNLOADS/xcctv（公共下载目录，所有 Android 版本必可写）
+ * 规则：创建 → 写入测试文件 → 成功即选，全部失败回退到 app 私有 filesDir。
+ */
 fun resolveRootDir(): File {
-    val dir = File("/sdcard/xcctv")
-    if (!dir.exists()) dir.mkdirs()
-    return dir
+    val candidates = listOf(
+        File("/sdcard/xcctv"),
+        File("/storage/emulated/0/xcctv"),
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "xcctv"),
+    )
+    for (dir in candidates) {
+        try {
+            if (dir.exists() || dir.mkdirs()) {
+                if (dir.canWrite()) {
+                    return dir
+                }
+            }
+        } catch (_: Exception) { /* 下一个 */ }
+    }
+    // 兜底：app 私有目录（保证一定可写）
+    return File(android.os.Environment.getDataDirectory(), "/data/data/com.xcctv.tvhelper/files/xcctv").apply {
+        if (!exists()) mkdirs()
+    }
 }
 
 // 进度回调接口
@@ -63,17 +84,31 @@ class XcctvSourceDownloader(
             progressListener?.onLog("🌐 线程数: $concurrency")
             progressListener?.onLog("开始下载主配置...")
 
-            // 1. 下载主配置
+            // 1. 确保目录存在并创建
+            if (!rootDir.exists()) {
+                rootDir.mkdirs()
+                if (!rootDir.exists()) {
+                    return@withContext Result.failure(
+                        Exception("无法创建保存目录: ${rootDir.absolutePath}，请检查存储权限")
+                    )
+                }
+            }
+            if (!rootDir.canWrite()) {
+                return@withContext Result.failure(
+                    Exception("保存目录不可写: ${rootDir.absolutePath}，请授予存储权限")
+                )
+            }
+
+            // 2. 下载主配置
             val mainJsonText = httpGet(mainSourceUrl)
                 .body?.string()
                 ?: return@withContext Result.failure(Exception("主配置返回空"))
 
             val mainFileName = URL(mainSourceUrl).path.split("/").last()
-            File(rootDir, mainFileName).apply {
-                parentFile?.mkdirs()
-                writeText(mainJsonText)
-            }
-            progressListener?.onLog("✅主配置已保存: $mainFileName")
+            val mainFile = File(rootDir, mainFileName)
+            mainFile.parentFile?.mkdirs()
+            mainFile.writeText(mainJsonText)
+            progressListener?.onLog("✅主配置已保存: ${mainFile.absolutePath}")
 
             // 2. 递归扫描 JSON 里所有 ./ 相对路径
             scanJsonElement(gson.fromJson(mainJsonText, JsonElement::class.java))

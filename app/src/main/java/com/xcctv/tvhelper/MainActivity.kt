@@ -111,27 +111,42 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             scrollToBottom()
         }
         btnFolder.setOnClickListener {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                try {
-                    val file = java.io.File(downloader.rootDir.absolutePath)
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                        this@MainActivity,
-                        "${packageName}.fileprovider",
-                        file
-                    )
-                    setDataAndType(uri, "resource/folder")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                } catch (_: Exception) {
-                    setDataAndType(android.net.Uri.parse("file://${downloader.rootDir.absolutePath}"), "*/*")
-                }
-            }
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivity(Intent.createChooser(intent, "打开文件夹"))
-            } else {
-                tvStatus.append("\n📁 路径: ${downloader.rootDir.absolutePath}")
+            // 尽量用系统文件管理器打开目录；全部失败就把路径打印到日志里
+            val dir = downloader.rootDir
+            val opened = tryOpenFolderWithSystemApp(dir)
+            if (!opened) {
+                tvStatus.append("\n📁 路径: ${dir.absolutePath}")
                 scrollToBottom()
             }
         }
+    }
+
+    /**
+     * 依次尝试多种方式唤起系统文件管理器打开目录。
+     * Android 11+ 可能被限制，全部失败返回 false。
+     */
+    private fun tryOpenFolderWithSystemApp(dir: java.io.File): Boolean {
+        if (!dir.exists()) return false
+        // 方式1: ACTION_VIEW + application/vnd.android.document
+        val candidates = listOf(
+            Intent(Intent.ACTION_VIEW).apply {
+                dataAndType = android.net.Uri.fromFile(dir) to "*/*"
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+            Intent(Intent.ACTION_VIEW).apply {
+                data = android.net.Uri.fromFile(dir)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+        )
+        for (intent in candidates) {
+            try {
+                if (intent.resolveActivity(packageManager) != null) {
+                    startActivity(Intent.createChooser(intent, "打开文件夹"))
+                    return true
+                }
+            } catch (_: Exception) { /* 尝试下一种 */ }
+        }
+        return false
     }
 
     private fun startDownload() {
