@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var etUrl: EditText
     private lateinit var tvStatus: TextView
     private lateinit var tvPermStatus: TextView
+    private lateinit var tvBanner: TextView
     private lateinit var btnStart: Button
     private lateinit var btnClear: Button
     private lateinit var btnFolder: Button
@@ -50,6 +51,10 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var progress: ProgressBar
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
+
+    // 横幅下载计数（onProgress 回调累积）
+    private var totalCount = 0
+    private var doneCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,6 +73,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         progress = findViewById(R.id.progress)
         tvTitle = findViewById(R.id.tv_title)
         tvSubtitle = findViewById(R.id.tv_subtitle)
+        tvBanner = findViewById(R.id.tv_banner)
+        tvBanner.visibility = View.GONE
 
         val deviceTag = if (isTvDevice) "📺 TV端" else "📱 手机端"
         tvTitle.text = "$deviceTag  XCCTV助手"
@@ -188,11 +195,15 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     // ========== TV 遥控器焦点 ==========
     private fun setupTvFocus() {
+        val scale = resources.displayMetrics.density
+
         etUrl.isFocusable = true
         btnStart.isFocusable = true
         btnClear.isFocusable = true
         btnFolder.isFocusable = true
         btnPerm.isFocusable = true
+
+        // 焦点方向链
         etUrl.nextFocusDownId = R.id.btn_start
         btnStart.nextFocusUpId = R.id.et_url
         btnStart.nextFocusDownId = R.id.btn_perm
@@ -203,17 +214,32 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnFolder.nextFocusLeftId = R.id.btn_clear
         btnFolder.nextFocusUpId = R.id.btn_start
 
-        val scale = resources.displayMetrics.density
-        fun enlarge(v: View, minHeightDp: Int = 48, textSp: Float = 18f) {
+        // ✅ 给每个按钮应用 TV 焦点 selector + 放大动效
+        fun tvSelectable(
+            v: View,
+            focusBgRes: Int,
+            minHeightDp: Int = 48,
+            textSp: Float = 18f
+        ) {
             (v as? Button)?.textSize = textSp
             v.minimumHeight = (minHeightDp * scale).toInt()
+            v.setBackgroundResource(focusBgRes)
             v.setOnFocusChangeListener { view, has ->
-                view.animate().scaleX(if (has) 1.15f else 1f).scaleY(if (has) 1.15f else 1f).duration = 150
+                view.animate()
+                    .scaleX(if (has) 1.12f else 1f)
+                    .scaleY(if (has) 1.12f else 1f)
+                    .translationZ(if (has) 8f * scale else 0f)
+                    .setDuration(180)
                 view.isActivated = has
             }
         }
-        enlarge(etUrl, 56, 16f); enlarge(btnStart); enlarge(btnClear)
-        enlarge(btnFolder); enlarge(btnPerm)
+
+        tvSelectable(etUrl, R.drawable.bg_input_tv, 56, 16f)
+        tvSelectable(btnStart, R.drawable.bg_btn_primary_tv)
+        tvSelectable(btnClear, R.drawable.bg_btn_ghost_tv)
+        tvSelectable(btnFolder, R.drawable.bg_btn_ghost_tv)
+        tvSelectable(btnPerm, R.drawable.bg_btn_primary_tv, 44, 16f)
+
         etUrl.requestFocus()
     }
 
@@ -261,6 +287,13 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnPerm.isEnabled = false
         progress.visibility = View.VISIBLE
         tvStatus.text = ""
+
+        // ✅ 横幅：下载中
+        totalCount = 0; doneCount = 0
+        tvBanner.visibility = View.VISIBLE
+        tvBanner.setBackgroundResource(R.drawable.bg_banner_loading)
+        tvBanner.text = "⏳ 下载中..."
+
         scrollToBottom()
 
         lifecycleScope.launch {
@@ -270,8 +303,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             btnPerm.isEnabled = !hasStoragePerm()
             progress.visibility = View.INVISIBLE
             if (ret.isSuccess) {
-                tvStatus.append("\n✅下载完成！去 /sdcard/xcctv 查看")
+                // ✅ 横幅：下载完成（绿色）
+                tvBanner.setBackgroundResource(R.drawable.bg_banner_done)
+                tvBanner.text = "🎉 下载完成  共 ${doneCount} 个文件  →  /sdcard/xcctv"
+                tvStatus.append("\n🎉下载完成！去 /sdcard/xcctv 查看")
             } else {
+                // ✅ 横幅：下载失败（红色）
+                tvBanner.setBackgroundColor(0xFFDC2626.toInt())
+                tvBanner.text = "❌ 下载失败: ${ret.exceptionOrNull()?.message?.take(60)}"
                 tvStatus.append("\n❌失败: ${ret.exceptionOrNull()?.message}")
             }
             scrollToBottom()
@@ -287,8 +326,12 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     override fun onProgress(current: Int, total: Int, file: String) {
         runOnUiThread {
+            totalCount = total
+            doneCount = current
             progress.max = total.coerceAtLeast(1)
             progress.progress = current
+            // ✅ 横幅实时更新进度
+            tvBanner.text = "⏳ 下载中  $current / $total"
             tvStatus.append("\n[$current/$total] $file")
             scrollToBottom()
         }
