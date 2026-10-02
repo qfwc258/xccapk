@@ -41,8 +41,20 @@ jobs:
             --exclude='FTY' \
             --exclude='favicon.ico' \
             /tmp/src/ tv/
-          if [ -f tv/dianshi.json ]; then mv tv/dianshi.json tv/vod.json; fi
+          # 重命名
+          if [ -f tv/dianshi.json ]; then
+            mv tv/dianshi.json tv/vod.json
+          fi
           ls -la tv/ | head
+
+      - name: Patch vod.json url field
+        run: |
+          FILE=tv/vod.json
+          if [ -f "$FILE" ]; then
+            # 将 lives[] 里面 url="./tv.txt" 修改为 url="./live.json"
+            jq '.lives[] |= (if .url == "./tv.txt" then .url = "./live.json" else . end)' "$FILE" > tmp.json
+            mv tmp.json "$FILE"
+          fi
 
       - name: Commit & push
         run: |
