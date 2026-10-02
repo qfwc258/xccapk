@@ -20,10 +20,27 @@ jobs:
           rm -rf /tmp/src
           git clone --depth 1 https://github.com/qist/tvbox.git /tmp/src
           rm -rf /tmp/src/.git
-          # 全量同步到 tv/ 目录
           mkdir -p tv
-          rsync -av --delete --exclude='.github' --exclude='.git' --exclude='live.json' --exclude='dx.json' --exclude='*.zip' --exclude='bak-*' /tmp/src/ tv/
-          # dianshi.json 改名 vod.json
+          rsync -av --delete \
+            --exclude='.github' \
+            --exclude='.git' \
+            --exclude='*.zip' \
+            --exclude='bak-*' \
+            --exclude='*.m3u' \
+            --exclude='live.json' \
+            --exclude='dx.json' \
+            --exclude='listx.txt' \
+            --exclude='list.txt' \
+            --exclude='ITV.txt' \
+            --exclude='zb.txt' \
+            --exclude='radio.txt' \
+            --exclude='tvlive.txt' \
+            --exclude='tvboxtv.txt' \
+            --exclude='cat' \
+            --exclude='xiaosa' \
+            --exclude='FTY' \
+            --exclude='favicon.ico' \
+            /tmp/src/ tv/
           if [ -f tv/dianshi.json ]; then mv tv/dianshi.json tv/vod.json; fi
           ls -la tv/ | head
 
@@ -32,5 +49,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --staged --quiet && echo "无更新" || git commit -m "chore: 全量同步 qist/tvbox 到 tv/"
+          git diff --staged --quiet && echo "无更新" || git commit -m "chore: 同步 qist/tvbox 点播源到 tv/"
           git push
