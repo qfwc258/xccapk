@@ -4,21 +4,25 @@ import android.os.Environment
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
-/** 统一计算外部存储根目录：优先 /sdcard/xcctv，fallback Download 目录 */
+/** 统一计算外部存储根目录：固定 /sdcard/xcctv */
 fun resolveRootDir(): File {
-    val primary = File("/sdcard/xcctv")
-    if (primary.canWrite() || primary.mkdirs()) return primary
-    // fallback（Android 分区存储下应用私有目录可读可写）
-    val fallback = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "xcctv")
-    if (fallback.exists() || fallback.mkdirs()) return fallback
-    return primary
+    val dir = File("/sdcard/xcctv")
+    if (!dir.exists()) dir.mkdirs()
+    return dir
 }
 
 // 进度回调接口
@@ -27,95 +31,144 @@ interface DownloadProgressListener {
     fun onLog(msg: String)
 }
 
+/**
+ * 下载器：4 线程并行 + 路径递归扫描 + URL 重写
+ */
 class XcctvSourceDownloader(
-    private val progressListener: DownloadProgressListener? = null
+    private val progressListener: DownloadProgressListener? = null,
+    private val concurrency: Int = 4 // ✅ 4 线程并行
 ) {
-    private val client = OkHttpClient()
+    // ✅ 连接池 + 超时配置，让并行下载更快
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
+        .build()
+
     private val gson = Gson()
     val rootDir: File = resolveRootDir()
 
-    private val relativePathSet = mutableSetOf<String>()
-    private val spiderMd5Map = mutableMapOf<String, String>()
+    private val relativePathSet = ConcurrentHashMap.newKeySet<String>()
+    private val spiderMd5Map = ConcurrentHashMap<String, String>()
 
+    // 🔽 对外入口：解析 → 下载（并行）
     suspend fun run(mainSourceUrl: String): Result<List<String>> = withContext(Dispatchers.IO) {
-        return@withContext try {
+        try {
             relativePathSet.clear()
             spiderMd5Map.clear()
+
             progressListener?.onLog("📁 保存目录: ${rootDir.absolutePath}")
+            progressListener?.onLog("🔗 源地址: $mainSourceUrl")
+            progressListener?.onLog("🌐 线程数: $concurrency")
             progressListener?.onLog("开始下载主配置...")
 
-            val mainResp = httpGet(mainSourceUrl)
-            val mainJsonText = mainResp.body?.string()
+            // 1. 下载主配置
+            val mainJsonText = httpGet(mainSourceUrl)
+                .body?.string()
                 ?: return@withContext Result.failure(Exception("主配置返回空"))
+
             val mainFileName = URL(mainSourceUrl).path.split("/").last()
-            val mainLocalFile = File(rootDir, mainFileName)
-            mainLocalFile.parentFile?.mkdirs()
-            mainLocalFile.writeText(mainJsonText)
-            progressListener?.onLog("✅主配置已保存: $mainLocalFile")
+            File(rootDir, mainFileName).apply {
+                parentFile?.mkdirs()
+                writeText(mainJsonText)
+            }
+            progressListener?.onLog("✅主配置已保存: $mainFileName")
 
-            // 扫描 JSON 收集所有相对路径
+            // 2. 递归扫描 JSON 里所有 ./ 相对路径
             scanJsonElement(gson.fromJson(mainJsonText, JsonElement::class.java))
-
-            val list = relativePathSet.toList()
-            val total = list.size
-            progressListener?.onLog("🔍共发现 ${total} 个资源文件")
             val baseUrlObj = URL(mainSourceUrl)
+            val allPaths = relativePathSet.toList()
 
-            for ((idx, relPath) in list.withIndex()) {
-                progressListener?.onProgress(idx + 1, total, relPath)
-                val absUrl = URL(baseUrlObj, relPath).toString()
-                val localFile = File(rootDir, relPath)
-                localFile.parentFile?.mkdirs()
-
-                val resp = httpGet(absUrl)
-                val bodyBytes = resp.body?.bytes()
-                resp.close()
-                if (bodyBytes == null) {
-                    progressListener?.onLog("⚠️$relPath 下载失败(空响应)")
-                    continue
-                }
-                localFile.writeBytes(bodyBytes)
-
-                // MD5 校验（仅 spider 声明过的）
-                val expectMd5 = spiderMd5Map[relPath]
-                if (!expectMd5.isNullOrEmpty()) {
-                    val realMd5 = getFileMd5(localFile)
-                    if (expectMd5.equals(realMd5, ignoreCase = true)) {
-                        progressListener?.onLog("✅$relPath MD5校验通过")
-                    } else {
-                        progressListener?.onLog("❌$relPath MD5不匹配 期望:$expectMd5 实际:$realMd5")
-                    }
-                }
+            progressListener?.onLog("🔍共发现 ${allPaths.size} 个资源文件")
+            if (allPaths.isEmpty()) {
+                return@withContext Result.success(emptyList())
             }
 
-            // 验证实际落盘文件数
+            // 3. ✅ 并行下载（信号量控制并发数）
+            var completed = 0
+            val mutex = Mutex()
+            val sem = kotlinx.coroutines.sync.Semaphore(concurrency)
+
+            coroutineScope {
+                allPaths.map { relPath ->
+                    async(Dispatchers.IO) {
+                        sem.acquire()
+                        try {
+                            downloadOne(baseUrlObj, relPath)
+                        } catch (e: Exception) {
+                            progressListener?.onLog("❌$relPath 下载失败: ${e.message}")
+                        } finally {
+                            sem.release()
+                        }
+                        // 进度合并（并发安全）
+                        mutex.withLock {
+                            completed++
+                            progressListener?.onProgress(completed, allPaths.size, relPath)
+                        }
+                    }
+                }.awaitAll()
+            }
+
+            // 4. 落盘文件数校验
             val actualCount = walkFiles(rootDir) - 1 // 减去主配置
-            progressListener?.onLog("🎉全部完成！实际落盘 ${actualCount} 个资源")
-            Result.success(list)
+            val failed = allPaths.size - actualCount
+            if (failed > 0) {
+                progressListener?.onLog("⚠️ 有 $failed 个文件可能未落盘")
+            }
+            progressListener?.onLog("🎉完成！实际落盘 ${actualCount} 个资源")
+
+            Result.success(allPaths)
         } catch (ex: Exception) {
+            progressListener?.onLog("💥出错: ${ex.stackTraceToString().take(300)}")
             Result.failure(ex)
         }
     }
 
-    /** 递归统计目录下文件数 */
-    private fun walkFiles(dir: File): Int {
-        var n = 0
-        dir.listFiles()?.forEach {
-            if (it.isDirectory) n += walkFiles(it)
-            else n++
+    private suspend fun downloadOne(baseUrlObj: URL, relPath: String) {
+        // ✅ URL 重写加固：遇到 jsdelivr/gh-proxy 等代理也要正确解析子路径
+        val absUrl = buildChildUrl(baseUrlObj, relPath)
+        val localFile = File(rootDir, relPath)
+        localFile.parentFile?.mkdirs()
+
+        val body = httpGet(absUrl).body?.bytes()
+            ?: throw Exception("空响应")
+        localFile.writeBytes(body)
+
+        // MD5 校验（spider 声明过的）
+        val expectMd5 = spiderMd5Map[relPath]
+        if (!expectMd5.isNullOrEmpty()) {
+            val realMd5 = getFileMd5(localFile)
+            if (expectMd5.equals(realMd5, ignoreCase = true)) {
+                progressListener?.onLog("✅$relPath MD5✓")
+            } else {
+                progressListener?.onLog("❌$relPath MD5不匹配")
+            }
         }
-        return n
     }
 
-    /** 解析 JSON 收集所有需要下载的相对路径（./xxx/yyy.ext） */
+    /** ✅ URL 相对路径解析加固：URL(base, "./jar/x.jar") 在代理 URL 上也能正确取到子目录 */
+    private fun buildChildUrl(base: URL, relPathClean: String): String {
+        // relPathClean 已经 removePrefix("./")，但 URL.resolve 需要它
+        val withDotSlash = "./$relPathClean"
+        return try {
+            URL(base, withDotSlash).toString()
+        } catch (e: Exception) {
+            // fallback：手动拼
+            val path = base.path
+            val slashIdx = path.lastIndexOf('/')
+            val dir = if (slashIdx >= 0) path.substring(0, slashIdx + 1) else "/"
+            "${base.protocol}://${base.host}${dir}${relPathClean}"
+        }
+    }
+
+    // ==================== JSON 扫描 ====================
+
     private fun scanJsonElement(element: JsonElement) {
         when {
             element.isJsonObject -> {
-                val obj = element.asJsonObject
-                for ((k, v) in obj.entrySet()) {
+                for ((k, v) in element.asJsonObject.entrySet()) {
                     if (k == "spider" && v.isJsonPrimitive) {
-                        // spider 特殊格式："./jar/spider.jar;md5;xxxxxx"
-                        // 只处理这一次，不再递归 v（避免 ;md5; 整串被当路径）
                         parseSpiderField(v.asString)
                     } else {
                         scanJsonElement(v)
@@ -127,35 +180,36 @@ class XcctvSourceDownloader(
             }
             element.isJsonPrimitive -> {
                 val str = element.asString
-                // 必须以 "./" 开头，且不能包含 ";md5;"（spider 已单独处理过）
                 if (str.startsWith("./") && !str.contains(";md5;")) {
-                    // 规范化：移除开头的 "./" 得到干净的相对路径
                     val clean = str.removePrefix("./").trim()
-                    if (clean.isNotEmpty()) {
-                        relativePathSet.add(clean)
-                    }
+                    if (clean.isNotEmpty()) relativePathSet.add(clean)
                 }
             }
         }
     }
 
-    /** 解析 spider 字段：支持带 md5 和不带 md5 两种 */
     private fun parseSpiderField(raw: String) {
         val parts = raw.split(";md5;")
         val pathRaw = parts[0].trim()
         if (!pathRaw.startsWith("./")) return
-        val cleanPath = pathRaw.removePrefix("./")
-        if (cleanPath.isEmpty()) return
-
-        relativePathSet.add(cleanPath)
+        val clean = pathRaw.removePrefix("./")
+        if (clean.isEmpty()) return
+        relativePathSet.add(clean)
         if (parts.size >= 2 && parts[1].isNotBlank()) {
-            spiderMd5Map[cleanPath] = parts[1].trim()
+            spiderMd5Map[clean] = parts[1].trim()
         }
     }
 
     private suspend fun httpGet(url: String) = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url(url).build()
-        client.newCall(req).execute()
+        client.newCall(Request.Builder().url(url).build()).execute()
+    }
+
+    private fun walkFiles(dir: File): Int {
+        var n = 0
+        dir.listFiles()?.forEach {
+            if (it.isDirectory) n += walkFiles(it) else n++
+        }
+        return n
     }
 
     fun clearCache() {

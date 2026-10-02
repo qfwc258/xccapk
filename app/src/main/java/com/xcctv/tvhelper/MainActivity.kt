@@ -1,5 +1,6 @@
 package com.xcctv.tvhelper
 
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -7,6 +8,7 @@ import android.text.method.ScrollingMovementMethod
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -14,96 +16,163 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
-    // 设备类型识别：同时兼容 LEANBACK 和旧版 Google TV 设备
+    companion object {
+        private const val PREFS = "xcctv_prefs"
+        private const val KEY_LAST_URL = "last_source_url"
+        // TV 端默认远程源（gh-proxy GitHub 镜像）
+        private const val DEFAULT_TV_URL =
+            "https://gh-proxy.org/https://raw.githubusercontent.com/qfwc258/xccapk/main/tv/vod.json"
+        private const val DEFAULT_PHONE_URL =
+            "https://gh-proxy.org/https://raw.githubusercontent.com/qfwc258/xccapk/main/tv/vod.json"
+    }
+
     private val isTvDevice: Boolean by lazy {
         packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
         packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION) ||
-        Build.FINGERPRINT.contains("google_tv", ignoreCase = true)
+        Build.FINGERPRINT.contains("google_tv", ignoreCase = true) ||
+        Build.FINGERPRINT.contains("androidtv", ignoreCase = true)
     }
 
+    private lateinit var prefs: SharedPreferences
     private lateinit var downloader: XcctvSourceDownloader
     private lateinit var etUrl: EditText
     private lateinit var tvStatus: TextView
     private lateinit var btnStart: Button
     private lateinit var btnClear: Button
+    private lateinit var btnFolder: Button
+    private lateinit var progress: ProgressBar
+    private lateinit var tvTitle: TextView
+    private lateinit var tvSubtitle: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+
+        // 绑定 Views
         etUrl = findViewById(R.id.et_url)
         tvStatus = findViewById(R.id.tv_status)
         btnStart = findViewById(R.id.btn_start)
         btnClear = findViewById(R.id.btn_clear)
+        btnFolder = findViewById(R.id.btn_folder)
+        progress = findViewById(R.id.progress)
+        tvTitle = findViewById(R.id.tv_title)
+        tvSubtitle = findViewById(R.id.tv_subtitle)
 
-        // 电视端：放大焦点高亮、调整字体与按钮尺寸
+        // ✅ TV/手机差异初始化
+        val deviceTag = if (isTvDevice) "📺 TV端" else "📱 手机端"
+        tvTitle.text = "$deviceTag  XCCTV助手"
+        tvSubtitle.text = "源地址解析 · 并行下载 · 本地缓存"
+
+        // ✅ TV 端默认源 / 手机端记住上次
+        val saved = prefs.getString(KEY_LAST_URL, null)
+        etUrl.setText(saved ?: if (isTvDevice) DEFAULT_TV_URL else DEFAULT_PHONE_URL)
+
+        // ✅ TV 端遥控器焦点链：URL → 开始下载 → 清空 → 打开目录
         if (isTvDevice) {
-            applyTvFocusStyle()
-        }
-
-        // Bug2 fix: ScrollingMovementMethod 让 TextView 可手动滑动下拉
-        tvStatus.movementMethod = ScrollingMovementMethod()
-
-        downloader = XcctvSourceDownloader(this)
-        val deviceTag = if (isTvDevice) "📺 电视端" else "📱 手机端"
-        tvStatus.text = "$deviceTag\n✅就绪\n📁 保存目录: ${downloader.rootDir.absolutePath}\n粘贴源地址 → 开始下载"
-
-        btnStart.setOnClickListener {
-            val url = etUrl.text.toString().trim()
-            if (url.isNotEmpty()) {
-                lifecycleScope.launch {
-                    btnStart.isEnabled = false
-                    val ret = downloader.run(url)
-                    ret.onSuccess {
-                        tvStatus.append("\n🎉全部下载完成！")
-                    }.onFailure { err ->
-                        tvStatus.append("\n❌失败:${err.message}")
-                    }
-                    btnStart.isEnabled = true
+            etUrl.isFocusable = true
+            btnStart.isFocusable = true
+            btnClear.isFocusable = true
+            btnFolder.isFocusable = true
+            etUrl.nextFocusDownId = R.id.btn_start
+            btnStart.nextFocusUpId = R.id.et_url
+            btnStart.nextFocusDownId = R.id.btn_clear
+            btnClear.nextFocusUpId = R.id.btn_start
+            btnClear.nextFocusRightId = R.id.btn_folder
+            btnFolder.nextFocusLeftId = R.id.btn_clear
+            btnFolder.nextFocusUpId = R.id.btn_start
+            // 焦点放大动效
+            val scale = resources.displayMetrics.density
+            fun enlarge(v: View, minHeightDp: Int = 48, textSp: Float = 18f) {
+                (v as? Button)?.textSize = textSp
+                v.minHeight = (minHeightDp * scale).toInt()
+                v.setOnFocusChangeListener { view, has ->
+                    view.animate().scaleX(if (has) 1.15f else 1f).scaleY(if (has) 1.15f else 1f).duration = 150
+                    view.isActivated = has
                 }
             }
+            enlarge(etUrl, 56, 16f); enlarge(btnStart); enlarge(btnClear); enlarge(btnFolder)
+            // 遥控器打开即聚焦 URL
+            etUrl.requestFocus()
         }
 
+        // ✅ ScrollingMovementMethod 让 TextView 可手动下拉
+        tvStatus.movementMethod = ScrollingMovementMethod()
+        progress.visibility = View.INVISIBLE
+
+        downloader = XcctvSourceDownloader(this)
+
+        btnStart.setOnClickListener { startDownload() }
         btnClear.setOnClickListener {
             downloader.clearCache()
             tvStatus.append("\n🗑️缓存已清空")
             scrollToBottom()
         }
-    }
-
-    /** Bug2 fix: 滚动到底部的辅助方法 */
-    private fun scrollToBottom() {
-        val layout = tvStatus.layout ?: return
-        val scrollHeight = layout.height - tvStatus.height
-        tvStatus.scrollTo(0, maxOf(0, scrollHeight))
-    }
-
-    /** 电视端焦点效果放大 + 字号/按钮高度适配 */
-    private fun applyTvFocusStyle() {
-        val scale = resources.displayMetrics.density
-        fun enlarge(view: View) {
-            view.setOnFocusChangeListener { v, hasFocus ->
-                v.animate()
-                    .scaleX(if (hasFocus) 1.12f else 1f)
-                    .scaleY(if (hasFocus) 1.12f else 1f)
-                    .setDuration(150)
-                    .start()
-                v.isActivated = hasFocus
+        btnFolder.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                try {
+                    val file = java.io.File(downloader.rootDir.absolutePath)
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity,
+                        "${packageName}.fileprovider",
+                        file
+                    )
+                    setDataAndType(uri, "resource/folder")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {
+                    setDataAndType(android.net.Uri.parse("file://${downloader.rootDir.absolutePath}"), "*/*")
+                }
+            }
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(Intent.createChooser(intent, "打开文件夹"))
+            } else {
+                tvStatus.append("\n📁 路径: ${downloader.rootDir.absolutePath}")
+                scrollToBottom()
             }
         }
-        enlarge(btnStart)
-        enlarge(btnClear)
-        enlarge(etUrl)
+    }
 
-        btnStart.textSize = 18f
-        btnClear.textSize = 18f
-        btnStart.minHeight = (48 * scale).toInt()
-        btnClear.minHeight = (48 * scale).toInt()
-        etUrl.textSize = 16f
-        tvStatus.textSize = 16f
+    private fun startDownload() {
+        val url = etUrl.text.toString().trim()
+        if (url.isEmpty()) {
+            tvStatus.append("\n⚠️请先输入源地址")
+            return
+        }
+        // ✅ 记住上次源
+        prefs.edit().putString(KEY_LAST_URL, url).apply()
+
+        btnStart.isEnabled = false
+        btnClear.isEnabled = false
+        progress.visibility = View.VISIBLE
+        tvStatus.text = ""
+        scrollToBottom()
+
+        lifecycleScope.launch {
+            val ret = downloader.run(url)
+            btnStart.isEnabled = true
+            btnClear.isEnabled = true
+            progress.visibility = View.INVISIBLE
+            if (ret.isSuccess) {
+                tvStatus.append("\n✅下载完成！去 /sdcard/xcctv 查看")
+            } else {
+                tvStatus.append("\n❌失败: ${ret.exceptionOrNull()?.message}")
+            }
+            scrollToBottom()
+        }
+    }
+
+    private fun scrollToBottom() {
+        tvStatus.post {
+            val layout = tvStatus.layout ?: return@post
+            tvStatus.scrollTo(0, maxOf(0, layout.height - tvStatus.height))
+        }
     }
 
     override fun onProgress(current: Int, total: Int, file: String) {
         runOnUiThread {
+            progress.max = total.coerceAtLeast(1)
+            progress.progress = current
             tvStatus.append("\n[$current/$total] $file")
             scrollToBottom()
         }
