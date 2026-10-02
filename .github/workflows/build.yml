@@ -88,9 +88,13 @@ jobs:
           APK=$(find ./apk_out -name '*.apk' -type f | head -1)
           [ -f "$APK" ] || { echo "❌ APK 不存在"; exit 1; }
 
-          cp "$APK" "./apk_out/${APK_NAME}"
-          APK_SIZE=$(du -h "$APK" | cut -f1)
-          SHA256=$(sha256sum "$APK" | cut -d' ' -f1)
+          # 如果文件名不同才重命名（避免 cp 同文件报错）
+          if [ "$(basename "$APK")" != "$APK_NAME" ]; then
+            mv "$APK" "./apk_out/${APK_NAME}"
+          fi
+          APK_FINAL="./apk_out/${APK_NAME}"
+          APK_SIZE=$(du -h "$APK_FINAL" | cut -f1)
+          SHA256=$(sha256sum "$APK_FINAL" | cut -d' ' -f1)
           echo "📦 APK: $APK_NAME ($APK_SIZE, SHA256=$SHA256)"
 
           # 创建 tag（仅非 tag 触发时）
