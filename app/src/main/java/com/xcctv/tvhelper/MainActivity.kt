@@ -31,11 +31,33 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             "https://gh-proxy.org/https://raw.githubusercontent.com/qfwc258/xccapk/main/tv/vod.json"
     }
 
+    /**
+     * 增强TV设备识别，适配魔百盒、UNT413等国产无Leanback盒子
+     * 判定优先级：系统TV特征 > 设备型号关键词匹配 > 无触摸屏兜底
+     */
     private val isTvDevice: Boolean by lazy {
-        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
-        packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION) ||
-        Build.FINGERPRINT.contains("google_tv", ignoreCase = true) ||
-        Build.FINGERPRINT.contains("androidtv", ignoreCase = true)
+        val pm = packageManager
+
+        // 1.标准Android TV系统特征
+        val hasLeanback = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        val hasTvFeature = pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+
+        // 2.原生TV指纹特征
+        val fingerprintTv = Build.FINGERPRINT.contains("google_tv", ignoreCase = true)
+                || Build.FINGERPRINT.contains("androidtv", ignoreCase = true)
+
+        // 3.国内盒子型号关键词库
+        val tvBoxKeywords = listOf(
+            "unt", "mibox", "mango", "tvbox", "box",
+            "魔百盒", "创维", "海美迪", "泰捷", "当贝",
+            "t95", "x96", "h96", "tx3", "tx6"
+        )
+        val modelMatchTv = tvBoxKeywords.any { Build.MODEL.contains(it, ignoreCase = true) }
+
+        // 4.兜底：无触摸屏判定为盒子/TV
+        val hasTouchScreen = pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+
+        hasLeanback || hasTvFeature || fingerprintTv || modelMatchTv || !hasTouchScreen
     }
 
     private lateinit var prefs: SharedPreferences
@@ -139,15 +161,15 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private fun hasStoragePerm(): Boolean {
         return when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
-                // Android 11+：MANAGE_EXTERNAL_STORAGE 或 legacy storage
+                // Android 11+：MANAGE_EXTERNAL_STORAGE
                 Environment.isExternalStorageManager()
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
-                // Android 10：requestLegacyExternalStorage=true 直接返回 true
+                // Android10，manifest配置requestLegacyExternalStorage=true
                 true
             }
             else -> {
-                // Android 9 及以下：READ/WRITE_EXTERNAL_STORAGE
+                // Android9及以下
                 checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
             }
         }
@@ -164,7 +186,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                     REQ_PERM
                 )
             } catch (_: Exception) {
-                // 某些定制 ROM 没这个 action，退到通用入口
+                // 部分定制ROM回退到通用入口
                 startActivityForResult(
                     Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
                     REQ_PERM
