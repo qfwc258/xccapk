@@ -119,7 +119,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="📂 目录"
+            android:text="🎯 默认源"
             android:textColor="#E2E8F0"
             android:textSize="14sp"
             android:background="@drawable/bg_btn_ghost"

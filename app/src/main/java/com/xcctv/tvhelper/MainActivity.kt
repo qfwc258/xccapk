@@ -97,19 +97,22 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         downloader = XcctvSourceDownloader(this)
 
         btnStart.setOnClickListener { startDownload() }
+
+        // ✅ 清空 = 只清输入框，不清缓存
         btnClear.setOnClickListener {
-            downloader.clearCache()
-            tvStatus.append("\n🗑️缓存已清空")
-            scrollToBottom()
+            etUrl.setText("")
+            etUrl.requestFocus()
+            tvBanner.visibility = View.GONE
         }
+
+        // ✅ 默认 = 恢复默认源地址
         btnFolder.setOnClickListener {
-            val dir = downloader.rootDir
-            val opened = tryOpenFolderWithSystemApp(dir)
-            if (!opened) {
-                tvStatus.append("\n📁 路径: ${dir.absolutePath}")
-                scrollToBottom()
-            }
+            val defaultUrl = if (isTvDevice) DEFAULT_TV_URL else DEFAULT_PHONE_URL
+            etUrl.setText(defaultUrl)
+            etUrl.setSelection(etUrl.text.length) // 光标跳到末尾
+            etUrl.requestFocus()
         }
+
         btnPerm.setOnClickListener { requestStoragePermission() }
     }
 
@@ -214,7 +217,10 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnFolder.nextFocusLeftId = R.id.btn_clear
         btnFolder.nextFocusUpId = R.id.btn_start
 
-        // ✅ 给每个按钮应用 TV 焦点 selector + 放大动效
+        // ✅ 给每个按钮应用 TV 焦点 selector + 放大动效 + 运行时文字颜色兜底
+        val FOCUS_TEXT_COLOR = 0xFFFFFFFF.toInt()   // 焦点时：纯白
+        val NORMAL_TEXT_COLOR = 0xFFE2E8F0.toInt()  // 普通时：浅灰蓝
+
         fun tvSelectable(
             v: View,
             focusBgRes: Int,
@@ -224,13 +230,24 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             (v as? Button)?.textSize = textSp
             v.minimumHeight = (minHeightDp * scale).toInt()
             v.setBackgroundResource(focusBgRes)
+            // 默认文字颜色
+            (v as? Button)?.setTextColor(NORMAL_TEXT_COLOR)
+
             v.setOnFocusChangeListener { view, has ->
                 view.animate()
                     .scaleX(if (has) 1.12f else 1f)
                     .scaleY(if (has) 1.12f else 1f)
                     .translationZ(if (has) 8f * scale else 0f)
                     .setDuration(180)
+
+                // ✅ 三重兜底：selector 背景 + activated 状态 + 运行时文字颜色
                 view.isActivated = has
+                if (view is Button) {
+                    view.setTextColor(if (has) FOCUS_TEXT_COLOR else NORMAL_TEXT_COLOR)
+                } else if (view is EditText && has) {
+                    view.setTextColor(0xFFE2E8F0.toInt())
+                    view.highlightColor = 0xFF22D3EE.toInt()
+                }
             }
         }
 
