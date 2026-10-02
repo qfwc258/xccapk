@@ -127,10 +127,9 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
      */
     private fun tryOpenFolderWithSystemApp(dir: java.io.File): Boolean {
         if (!dir.exists()) return false
-        // 方式1: ACTION_VIEW + application/vnd.android.document
         val candidates = listOf(
             Intent(Intent.ACTION_VIEW).apply {
-                dataAndType = android.net.Uri.fromFile(dir) to "*/*"
+                setDataAndType(android.net.Uri.fromFile(dir), "*/*")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             },
             Intent(Intent.ACTION_VIEW).apply {
@@ -144,7 +143,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                     startActivity(Intent.createChooser(intent, "打开文件夹"))
                     return true
                 }
-            } catch (_: Exception) { /* 尝试下一种 */ }
+            } catch (_: Exception) { /* 下一种 */ }
         }
         return false
     }
