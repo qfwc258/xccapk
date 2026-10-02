@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, master, xcctv-tvhelper-src]
     tags: ['v*']
+    paths-ignore:
+      - 'tv/**' # 忽略 tv 文件夹下所有文件改动，仅tv变更不会触发push构建
   workflow_dispatch:
 
 permissions:
