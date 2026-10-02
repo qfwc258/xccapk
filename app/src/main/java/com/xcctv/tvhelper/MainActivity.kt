@@ -43,7 +43,11 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         downloader = XcctvSourceDownloader(applicationContext, this)
         httpServer = XcctvHttpServer(downloader.rootDir)
         val deviceTag = if (isTvDevice) "📺 电视端" else "📱 手机端"
-        val startOk = try { httpServer.start() } catch (_: Exception) { false }
+        var startOk = false
+        try {
+            httpServer.start()
+            startOk = true
+        } catch (_: Exception) { /* 端口被占用等 */ }
         val serverMsg = if (startOk) {
             "✅HTTP服务已启动:127.0.0.1:7890\nTVBox: clan://localhost/xcctv/vod.json\nFongMi: file://xcctv/vod.json"
         } else {
