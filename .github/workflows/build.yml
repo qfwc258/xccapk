@@ -3,11 +3,19 @@ name: Build APK
 on:
   push:
     branches: [main, master, xcctv-tvhelper-src]
+    tags: ['v*']
   workflow_dispatch:
+
+permissions:
+  contents: write   # ✅ 允许创建 tag + release
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
+      apk_path: ${{ steps.find_apk.outputs.path }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,6 +28,26 @@ jobs:
 
       - name: Grant gradlew exec
         run: chmod +x ./gradlew
+
+      # ✅ 自动从 build.gradle 读版本号
+      - name: Extract versionName
+        id: extract_version
+        run: |
+          VER=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle | head -1)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "📦 版本: $VER"
+
+      # 如果是 tag 触发，且 tag 与 version 一致，跳过编译（避免重复）
+      - name: Skip if tag already triggered
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VER="${{ steps.extract_version.outputs.version }}"
+          if [ "$TAG" != "$VER" ]; then
+            echo "⚠️ tag v$TAG != version $VER，继续编译"
+          else
+            echo "✅ tag 与 version 一致，但 APK 不存在于 artifacts，仍需编译"
+          fi
 
       - name: Assemble Release
         run: |
@@ -35,9 +63,110 @@ jobs:
       - name: List outputs
         run: find app/build/outputs -name '*.apk' -type f -ls
 
-      - name: Upload APK
+      - name: Find APK path
+        id: find_apk
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: XCCTV-TVHelper-release
-          path: app/build/outputs/apk/release/*.apk
+          path: ${{ steps.find_apk.outputs.path }}
           retention-days: 30
+
+  # ✅ 独立 job：编译成功后自动创建 tag + release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: needs.build.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gh CLI
+        run: sudo apt-get update && sudo apt-get install -y gh
+
+      - name: Create tag + Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          APK_PATH: ${{ needs.build.outputs.apk_path }}
+        run: |
+          TAG="v${VERSION}"
+          REPO="${GITHUB_REPOSITORY}"
+
+          # 从 artifact 下载 APK
+          echo "📥 下载 APK artifact..."
+          gh run download "${GITHUB_RUN_ID}" \
+            --repo "$REPO" \
+            --name "XCCTV-TVHelper-release" \
+            --dir ./apk_out
+
+          APK=$(find ./apk_out -name '*.apk' -type f | head -1)
+          if [ ! -f "$APK" ]; then
+            echo "❌ APK 不存在于 artifact！"
+            exit 1
+          fi
+
+          # 计算文件信息
+          APK_SIZE=$(du -h "$APK" | cut -f1)
+          APK_BYTES=$(stat -c%s "$APK")
+          SHA256=$(sha256sum "$APK" | cut -d' ' -f1)
+          echo "📦 APK: $APK  ($APK_SIZE, ${APK_BYTES} bytes)"
+          echo "🔑 SHA-256: $SHA256"
+
+          # 如果当前 run 不是 tag 触发 → 创建 tag（且仅当不存在）
+          if ! [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "⏭️ tag $TAG 已存在，跳过创建"
+            else
+              echo "🏷️ 创建 tag $TAG"
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag -a "$TAG" -m "Release $VERSION"
+              git push origin "$TAG"
+            fi
+          fi
+
+          # 创建 Release（存在则更新）
+          echo "🚀 创建 GitHub Release $TAG"
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --title "XCCTV TVHelper v${VERSION}" \
+            --notes "$(cat <<EOF
+## 📱 XCCTV TVHelper v${VERSION}
+
+### 📦 文件
+- **APK**: \`XCCTV-TVHelper-${VERSION}-release.apk\`
+- **大小**: ${APK_SIZE}
+- **SHA-256**: \`${SHA256}\`
+- **签名**: release.keystore (alias: \`xcctv\`)
+
+### ✨ 功能
+- ✅  TV / 手机双端自动识别 + 遥控器焦点链
+- ✅  4 线程并行下载（Semaphore + Mutex）
+- ✅  嵌套路径循环扫描（drpy2.min.js → ./uri.min.js 自动发现）
+- ✅  固定保存到 /sdcard/xcctv（需 MANAGE_EXTERNAL_STORAGE 权限）
+- ✅  TV 焦点颜色高亮（紫色填充 + 青色发光边框 + 1.12x 放大）
+- ✅  下载状态横幅（下载中 / 完成 / 失败 三态）
+
+### 🛠️ 安装说明
+1. 安装 APK
+2. 首次打开点 **🔐 授权** 授予"所有文件访问权限"
+3. TV 端默认源已预填，手机端可自定义
+4. 点 **🚀 开始下载** → 文件保存到 /sdcard/xcctv
+5. TVBox/FongMi 添加源：\`file://xcctv/vod.json\`
+
+### 📝 更新日志
+- 嵌套路径循环扫描
+- /sdcard 直接写入 + 权限申请
+- TV 焦点三重兜底（selector + activated + 运行时颜色）
+EOF
+)" \
+            --target "${GITHUB_SHA}" \
+            "$APK#XCCTV-TVHelper-${VERSION}-release.apk" \
+            || echo "⚠️  Release 可能已存在，尝试删除重建..."
+
+          echo "✅ Release $TAG 发布完成！"
+          echo "🔗 https://github.com/$REPO/releases/tag/$TAG"
