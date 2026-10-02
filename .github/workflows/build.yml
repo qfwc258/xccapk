@@ -119,6 +119,7 @@ jobs:
         env:
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p ./release_out
           gh run download "${RUN_ID}" \
