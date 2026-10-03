@@ -245,7 +245,8 @@ class XcctvSourceDownloader(
         if (!expectMd5.isNullOrEmpty()) {
             return expectMd5.equals(getFileMd5(localFile), ignoreCase = true)
         }
-        return true
+        // 无 MD5 信息时无法判断内容是否变化，直接重新下载覆盖
+        return false
     }
 
     private fun scanNewlyDownloadedSource(rootDir: File): Int {
