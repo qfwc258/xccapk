@@ -1,6 +1,5 @@
 package com.xcctv.tvhelper
 
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -103,8 +102,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnStart.setOnClickListener { startDownload() }
         btnStop.setOnClickListener { stopDownload() }
         btnPerm.setOnClickListener { requestStoragePerm() }
-        btnClear.setOnClickListener { clearCurrentUrl() }
-        btnPaste.setOnClickListener { pasteUrl() }
+        btnClear.setOnClickListener { clearInputUrl() }
+        btnPaste.setOnClickListener { fillDefaultUrl() }
         etUrl.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) persistCurrentUrl()
         }
@@ -236,7 +235,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
     }
 
-    private fun clearCurrentUrl() {
+    private fun fillDefaultUrl() {
         val preset = AppConstants.SOURCE_PRESETS.getOrNull(sourceIndex) ?: return
         prefs.edit().remove(AppConstants.urlKey(sourceIndex)).apply()
         etUrl.setText(preset.url)
@@ -244,28 +243,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         if (isTvDevice) enterCustomEdit()
     }
 
-    private fun pasteUrl() {
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = cm.primaryClip
-        val text = if (clip != null && clip.itemCount > 0) {
-            clip.getItemAt(0).coerceToText(this).toString().trim()
-        } else {
-            ""
-        }
-        if (text.isEmpty()) {
-            appendLog(getString(R.string.log_paste_empty))
-            return
-        }
-        etUrl.setText(text)
-        persistCurrentUrl()
-        appendLog(getString(R.string.log_paste_ok))
+    private fun clearInputUrl() {
+        etUrl.setText("")
         etUrl.requestFocus()
         if (isTvDevice) enterCustomEdit()
     }
 
     private fun currentSourceUrl(): String {
-        val typed = etUrl.text.toString().trim()
-        return typed.ifEmpty { resolvedUrl(sourceIndex) }
+        return etUrl.text.toString().trim()
     }
 
     private fun focusCurrentTile() {

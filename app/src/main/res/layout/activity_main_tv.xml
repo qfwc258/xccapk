@@ -4,10 +4,10 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/bg_page"
-    android:paddingStart="48dp"
-    android:paddingEnd="48dp"
-    android:paddingTop="36dp"
-    android:paddingBottom="36dp"
+    android:paddingStart="36dp"
+    android:paddingEnd="36dp"
+    android:paddingTop="28dp"
+    android:paddingBottom="28dp"
     android:descendantFocusability="afterDescendants">
 
     <LinearLayout
@@ -34,7 +34,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/title_tv"
                 android:textColor="@color/text_primary"
-                android:textSize="28sp"
+                android:textSize="26sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.02"/>
 
@@ -44,7 +44,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/subtitle"
                 android:textColor="@color/text_secondary"
-                android:textSize="14sp"/>
+                android:textSize="13sp"/>
         </LinearLayout>
 
         <TextView
@@ -64,289 +64,308 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:orientation="vertical"
-        android:padding="18dp"
-        android:background="@drawable/bg_card">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/label_source"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp"
-            android:letterSpacing="0.08"
-            android:layout_marginBottom="12dp"/>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/tile_vod"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:gravity="center"
-                android:text="@string/source_vod"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:background="@drawable/bg_source_tile"
-                android:focusable="true"
-                android:clickable="true"
-                android:contentDescription="@string/cd_source_vod"
-                android:nextFocusRight="@id/tile_jsm"
-                android:nextFocusDown="@id/et_url"/>
-
-            <TextView
-                android:id="@+id/tile_jsm"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:layout_marginStart="10dp"
-                android:gravity="center"
-                android:text="@string/source_jsm"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:background="@drawable/bg_source_tile"
-                android:focusable="true"
-                android:clickable="true"
-                android:contentDescription="@string/cd_source_jsm"
-                android:nextFocusLeft="@id/tile_vod"
-                android:nextFocusDown="@id/et_url"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/custom_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <EditText
-                android:id="@+id/et_url"
-                android:layout_width="0dp"
-                android:layout_height="52dp"
-                android:layout_weight="1"
-                android:hint="@string/hint_custom_url"
-                android:inputType="textUri"
-                android:imeOptions="actionDone"
-                android:singleLine="true"
-                android:textSize="15sp"
-                android:textColor="@color/text_input"
-                android:textColorHint="@color/text_hint"
-                android:background="@drawable/bg_input_tv"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:textCursorDrawable="@null"
-                android:nextFocusRight="@id/btn_paste"
-                android:nextFocusDown="@id/btn_start"
-                android:nextFocusUp="@id/tile_vod"/>
-
-            <Button
-                android:id="@+id/btn_paste"
-                android:layout_width="wrap_content"
-                android:layout_height="52dp"
-                android:minWidth="88dp"
-                android:layout_marginStart="10dp"
-                android:text="@string/btn_paste"
-                android:textColor="@color/btn_ghost_text"
-                android:textSize="15sp"
-                android:background="@drawable/bg_btn_ghost_tv"
-                android:stateListAnimator="@null"
-                android:textAllCaps="false"
-                android:contentDescription="@string/cd_paste"
-                android:nextFocusLeft="@id/et_url"
-                android:nextFocusRight="@id/btn_clear"
-                android:nextFocusDown="@id/btn_start"
-                android:nextFocusUp="@id/tile_jsm"/>
-
-            <Button
-                android:id="@+id/btn_clear"
-                android:layout_width="wrap_content"
-                android:layout_height="52dp"
-                android:minWidth="88dp"
-                android:layout_marginStart="10dp"
-                android:text="@string/btn_clear"
-                android:textColor="@color/btn_ghost_text"
-                android:textSize="15sp"
-                android:background="@drawable/bg_btn_ghost_tv"
-                android:stateListAnimator="@null"
-                android:textAllCaps="false"
-                android:contentDescription="@string/cd_clear"
-                android:nextFocusLeft="@id/btn_paste"
-                android:nextFocusDown="@id/btn_start"
-                android:nextFocusUp="@id/tile_jsm"/>
-        </LinearLayout>
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/tv_banner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:minHeight="44dp"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp"
-        android:text="@string/banner_idle"
-        android:textColor="@color/text_secondary"
-        android:textSize="15sp"
-        android:gravity="center_vertical"
-        android:background="@drawable/bg_banner_idle"
-        android:maxLines="2"
-        android:ellipsize="end"/>
-
-    <Button
-        android:id="@+id/btn_start"
-        android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:layout_marginTop="14dp"
-        android:text="@string/btn_start"
-        android:textColor="@color/btn_primary_text"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:background="@drawable/bg_btn_primary_tv"
-        android:stateListAnimator="@null"
-        android:textAllCaps="false"
-        android:nextFocusUp="@id/et_url"
-        android:nextFocusDown="@id/btn_stop"/>
-
-    <Button
-        android:id="@+id/btn_stop"
-        android:layout_width="match_parent"
-        android:layout_height="52dp"
-        android:layout_marginTop="10dp"
-        android:text="@string/btn_stop"
-        android:textColor="@color/btn_ghost_text"
-        android:textSize="16sp"
-        android:background="@drawable/bg_btn_ghost_tv"
-        android:stateListAnimator="@null"
-        android:textAllCaps="false"
-        android:enabled="false"
-        android:nextFocusUp="@id/btn_start"
-        android:nextFocusDown="@id/btn_perm"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp"
-        android:background="@drawable/bg_card">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal">
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:layout_height="match_parent"
+            android:layout_weight="6"
+            android:orientation="vertical"
+            android:layout_marginEnd="16dp">
 
-            <TextView
-                android:id="@+id/tv_perm_status"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/perm_checking"
-                android:textSize="13sp"
-                android:textColor="@color/text_secondary"/>
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="@drawable/bg_card">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/label_source"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="10dp"/>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tile_vod"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="@string/source_vod"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_source_tile"
+                        android:focusable="true"
+                        android:clickable="true"
+                        android:contentDescription="@string/cd_source_vod"
+                        android:nextFocusRight="@id/tile_jsm"
+                        android:nextFocusDown="@id/et_url"/>
+
+                    <TextView
+                        android:id="@+id/tile_jsm"
+                        android:layout_width="0dp"
+                        android:layout_height="52dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="10dp"
+                        android:gravity="center"
+                        android:text="@string/source_jsm"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/bg_source_tile"
+                        android:focusable="true"
+                        android:clickable="true"
+                        android:contentDescription="@string/cd_source_jsm"
+                        android:nextFocusLeft="@id/tile_vod"
+                        android:nextFocusRight="@id/tv_status"
+                        android:nextFocusDown="@id/et_url"/>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/custom_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <EditText
+                        android:id="@+id/et_url"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:hint="@string/hint_custom_url"
+                        android:inputType="textUri"
+                        android:imeOptions="actionDone"
+                        android:singleLine="true"
+                        android:textSize="14sp"
+                        android:textColor="@color/text_input"
+                        android:textColorHint="@color/text_hint"
+                        android:background="@drawable/bg_input_tv"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:textCursorDrawable="@null"
+                        android:nextFocusRight="@id/btn_paste"
+                        android:nextFocusDown="@id/btn_start"
+                        android:nextFocusUp="@id/tile_vod"/>
+
+                    <Button
+                        android:id="@+id/btn_paste"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:minWidth="80dp"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/btn_default"
+                        android:textColor="@color/btn_ghost_text"
+                        android:textSize="14sp"
+                        android:background="@drawable/bg_btn_ghost_tv"
+                        android:stateListAnimator="@null"
+                        android:textAllCaps="false"
+                        android:contentDescription="@string/cd_default"
+                        android:nextFocusLeft="@id/et_url"
+                        android:nextFocusRight="@id/btn_clear"
+                        android:nextFocusDown="@id/btn_start"
+                        android:nextFocusUp="@id/tile_jsm"/>
+
+                    <Button
+                        android:id="@+id/btn_clear"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:minWidth="80dp"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/btn_clear"
+                        android:textColor="@color/btn_ghost_text"
+                        android:textSize="14sp"
+                        android:background="@drawable/bg_btn_ghost_tv"
+                        android:stateListAnimator="@null"
+                        android:textAllCaps="false"
+                        android:contentDescription="@string/cd_clear"
+                        android:nextFocusLeft="@id/btn_paste"
+                        android:nextFocusRight="@id/tv_status"
+                        android:nextFocusDown="@id/btn_start"
+                        android:nextFocusUp="@id/tile_jsm"/>
+                </LinearLayout>
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/tv_save_path"
+                android:id="@+id/tv_banner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint"
-                android:fontFamily="monospace"
-                android:maxLines="1"
-                android:ellipsize="middle"/>
+                android:layout_marginTop="12dp"
+                android:minHeight="40dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:text="@string/banner_idle"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_banner_idle"
+                android:maxLines="2"
+                android:ellipsize="end"/>
+
+            <Button
+                android:id="@+id/btn_start"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:text="@string/btn_start"
+                android:textColor="@color/btn_primary_text"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_btn_primary_tv"
+                android:stateListAnimator="@null"
+                android:textAllCaps="false"
+                android:nextFocusUp="@id/et_url"
+                android:nextFocusDown="@id/btn_stop"
+                android:nextFocusRight="@id/tv_status"/>
+
+            <Button
+                android:id="@+id/btn_stop"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/btn_stop"
+                android:textColor="@color/btn_ghost_text"
+                android:textSize="15sp"
+                android:background="@drawable/bg_btn_ghost_tv"
+                android:stateListAnimator="@null"
+                android:textAllCaps="false"
+                android:enabled="false"
+                android:nextFocusUp="@id/btn_start"
+                android:nextFocusDown="@id/btn_perm"
+                android:nextFocusRight="@id/tv_status"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:background="@drawable/bg_card">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_perm_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/perm_checking"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary"/>
+
+                    <TextView
+                        android:id="@+id/tv_save_path"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_hint"
+                        android:fontFamily="monospace"
+                        android:maxLines="1"
+                        android:ellipsize="middle"/>
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_perm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:minWidth="0dp"
+                    android:text="@string/btn_grant_permission"
+                    android:textColor="@color/btn_ghost_text"
+                    android:textSize="13sp"
+                    android:background="@drawable/bg_btn_ghost_tv"
+                    android:stateListAnimator="@null"
+                    android:textAllCaps="false"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:nextFocusUp="@id/btn_stop"
+                    android:nextFocusDown="@id/cb_boot"
+                    android:nextFocusRight="@id/cb_boot"/>
+
+                <CheckBox
+                    android:id="@+id/cb_boot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="10dp"
+                    android:text="@string/boot_launch"
+                    android:textColor="@color/text_body"
+                    android:textSize="14sp"
+                    android:buttonTint="@color/cyan"
+                    android:background="@drawable/bg_focusable"
+                    android:checked="false"
+                    android:nextFocusLeft="@id/btn_perm"
+                    android:nextFocusRight="@id/tv_status"
+                    android:nextFocusUp="@id/btn_perm"/>
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="12dp"
+                android:progressDrawable="@drawable/bg_progress"
+                android:indeterminate="false"
+                android:max="100"
+                android:progress="0"/>
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_perm"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:minWidth="0dp"
-            android:text="@string/btn_grant_permission"
-            android:textColor="@color/btn_ghost_text"
-            android:textSize="14sp"
-            android:background="@drawable/bg_btn_ghost_tv"
-            android:stateListAnimator="@null"
-            android:textAllCaps="false"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:nextFocusUp="@id/btn_stop"
-            android:nextFocusDown="@id/cb_boot"
-            android:nextFocusRight="@id/cb_boot"/>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="4"
+            android:orientation="vertical"
+            android:background="@drawable/bg_log"
+            android:padding="16dp">
 
-        <CheckBox
-            android:id="@+id/cb_boot"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginStart="12dp"
-            android:text="@string/boot_launch"
-            android:textColor="@color/text_body"
-            android:textSize="15sp"
-            android:buttonTint="@color/cyan"
-            android:background="@drawable/bg_focusable"
-            android:checked="false"
-            android:nextFocusLeft="@id/btn_perm"
-            android:nextFocusUp="@id/btn_perm"/>
-    </LinearLayout>
+            <TextView
+                android:id="@+id/tv_log_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_log"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:letterSpacing="0.08"
+                android:layout_marginBottom="8dp"/>
 
-    <ProgressBar
-        android:id="@+id/progress"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="6dp"
-        android:layout_marginTop="12dp"
-        android:progressDrawable="@drawable/bg_progress"
-        android:indeterminate="false"
-        android:max="100"
-        android:progress="0"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="14dp"
-        android:orientation="vertical"
-        android:background="@drawable/bg_log"
-        android:padding="16dp">
-
-        <TextView
-            android:id="@+id/tv_log_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/label_log"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp"
-            android:letterSpacing="0.08"
-            android:layout_marginBottom="8dp"/>
-
-        <TextView
-            android:id="@+id/tv_status"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:textSize="14sp"
-            android:textColor="@color/text_body"
-            android:lineSpacingExtra="4dp"
-            android:fontFamily="monospace"
-            android:scrollbars="vertical"
-            android:textIsSelectable="false"
-            android:focusable="true"
-            android:focusableInTouchMode="false"
-            android:background="@drawable/bg_focusable"
-            android:nextFocusLeft="@id/btn_start"/>
+            <TextView
+                android:id="@+id/tv_status"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:textColor="@color/text_body"
+                android:lineSpacingExtra="4dp"
+                android:fontFamily="monospace"
+                android:scrollbars="vertical"
+                android:textIsSelectable="false"
+                android:focusable="true"
+                android:focusableInTouchMode="false"
+                android:background="@drawable/bg_focusable"
+                android:nextFocusLeft="@id/btn_start"/>
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
