@@ -1,5 +1,7 @@
 package com.xcctv.tvhelper
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -129,6 +131,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             if (checked) HttpServerService.start(this) else HttpServerService.stop(this)
             updateHttpAddrDisplay()
         }
+        tvHttpAddr.setOnClickListener { copyHttpAddr() }
 
         if (isTvDevice) setupTvControls()
     }
@@ -472,11 +475,20 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private fun updateHttpAddrDisplay() {
         if (cbHttpServer.isChecked) {
             val ip = getLocalIpAddress()
-            tvHttpAddr.text = "局域网地址: http://$ip:${AppConstants.HTTP_PORT}/vod.json"
+            val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
+            tvHttpAddr.text = "$url  (点击复制)"
             tvHttpAddr.visibility = View.VISIBLE
         } else {
             tvHttpAddr.visibility = View.GONE
         }
+    }
+
+    private fun copyHttpAddr() {
+        val ip = getLocalIpAddress()
+        val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("http_source_url", url))
+        android.widget.Toast.makeText(this, "已复制: $url", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     private fun getLocalIpAddress(): String {
