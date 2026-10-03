@@ -362,9 +362,7 @@
                 android:fontFamily="monospace"
                 android:clickable="true"
                 android:focusable="true"
-                android:background="@drawable/bg_focusable"
                 android:nextFocusUp="@id/cb_http_server"
-                android:nextFocusDown="@id/progress"
                 android:visibility="gone"/>
 
             <ProgressBar

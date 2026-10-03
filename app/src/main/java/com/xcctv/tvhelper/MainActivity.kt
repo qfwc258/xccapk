@@ -133,7 +133,13 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         }
         tvHttpAddr.setOnClickListener { copyHttpAddr() }
 
-        if (isTvDevice) setupTvControls()
+        if (isTvDevice) {
+            try {
+                setupTvControls()
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "setupTvControls failed: ${e.message}", e)
+            }
+        }
     }
 
     private fun bindViews() {
