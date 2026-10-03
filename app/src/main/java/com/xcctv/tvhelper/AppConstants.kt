@@ -8,7 +8,9 @@ object AppConstants {
     const val KEY_SOURCE_INDEX = "source_preset_index"
     const val KEY_BOOT_LAUNCH = "boot_launch_enabled"
     const val KEY_AUTO_UPDATE = "auto_update_enabled"
+    const val KEY_HTTP_SERVER = "http_server_enabled"
     const val WORK_AUTO_UPDATE = "auto_update_work"
+    const val HTTP_PORT = 8080
     const val KEY_URL_PREFIX = "source_url_"
     const val ROOT_DIR = "/sdcard/xcctv"
     const val FALLBACK_DIR_NAME = "xcctv"

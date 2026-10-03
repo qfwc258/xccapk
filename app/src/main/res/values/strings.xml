@@ -38,6 +38,7 @@
     <string name="log_paste_ok">已粘贴</string>
     <string name="boot_launch">开机自启</string>
     <string name="auto_update">每日自动更新源</string>
+    <string name="http_server">局域网HTTP源服务</string>
     <string name="save_path">保存目录  %1$s</string>
     <string name="cd_source_vod">选择点播源 vod.json</string>
     <string name="cd_source_jsm">选择合集源 jsm.json</string>

@@ -294,7 +294,30 @@
             android:buttonTint="@color/cyan"
             android:checked="false"
             android:nextFocusUp="@id/cb_boot"
+            android:nextFocusDown="@id/cb_http_server"/>
+
+        <CheckBox
+            android:id="@+id/cb_http_server"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/http_server"
+            android:textColor="@color/text_body"
+            android:textSize="13sp"
+            android:buttonTint="@color/cyan"
+            android:checked="false"
+            android:nextFocusUp="@id/cb_auto_update"
             android:nextFocusDown="@id/tv_status"/>
+
+        <TextView
+            android:id="@+id/tv_http_addr"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="11sp"
+            android:textColor="@color/cyan"
+            android:fontFamily="monospace"
+            android:visibility="gone"/>
     </LinearLayout>
 
     <ProgressBar

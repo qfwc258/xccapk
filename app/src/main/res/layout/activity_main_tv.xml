@@ -332,9 +332,34 @@
                     android:background="@drawable/bg_focusable"
                     android:checked="false"
                     android:nextFocusLeft="@id/cb_boot"
+                    android:nextFocusRight="@id/cb_http_server"
+                    android:nextFocusUp="@id/btn_perm"/>
+
+                <CheckBox
+                    android:id="@+id/cb_http_server"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="10dp"
+                    android:text="@string/http_server"
+                    android:textColor="@color/text_body"
+                    android:textSize="14sp"
+                    android:buttonTint="@color/cyan"
+                    android:background="@drawable/bg_focusable"
+                    android:checked="false"
+                    android:nextFocusLeft="@id/cb_auto_update"
                     android:nextFocusRight="@id/tv_status"
                     android:nextFocusUp="@id/btn_perm"/>
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_http_addr"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textSize="12sp"
+                android:textColor="@color/cyan"
+                android:fontFamily="monospace"
+                android:visibility="gone"/>
 
             <ProgressBar
                 android:id="@+id/progress"

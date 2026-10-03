@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -57,6 +58,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var btnPerm: Button
     private lateinit var cbBoot: CheckBox
     private lateinit var cbAutoUpdate: CheckBox
+    private lateinit var cbHttpServer: CheckBox
+    private lateinit var tvHttpAddr: TextView
     private lateinit var progress: ProgressBar
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
@@ -119,6 +122,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             if (checked) AutoUpdateScheduler.enable(this) else AutoUpdateScheduler.disable(this)
         }
 
+        cbHttpServer.isChecked = prefs.getBoolean(AppConstants.KEY_HTTP_SERVER, false)
+        updateHttpAddrDisplay()
+        cbHttpServer.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(AppConstants.KEY_HTTP_SERVER, checked).apply()
+            if (checked) HttpServerService.start(this) else HttpServerService.stop(this)
+            updateHttpAddrDisplay()
+        }
+
         if (isTvDevice) setupTvControls()
     }
 
@@ -135,6 +146,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnPerm = findViewById(R.id.btn_perm)
         cbBoot = findViewById(R.id.cb_boot)
         cbAutoUpdate = findViewById(R.id.cb_auto_update)
+        cbHttpServer = findViewById(R.id.cb_http_server)
+        tvHttpAddr = findViewById(R.id.tv_http_addr)
         progress = findViewById(R.id.progress)
         tvTitle = findViewById(R.id.tv_title)
         tvSubtitle = findViewById(R.id.tv_subtitle)
@@ -326,7 +339,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             }
         }
         listOfNotNull(
-            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm, cbBoot, cbAutoUpdate
+            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm, cbBoot, cbAutoUpdate, cbHttpServer
         ).forEach { view ->
             view.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -452,7 +465,35 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     override fun onResume() {
         super.onResume()
         refreshPermStatus()
+        updateHttpAddrDisplay()
         if (isTvDevice && currentFocus == null) btnStart.post { btnStart.requestFocus() }
+    }
+
+    private fun updateHttpAddrDisplay() {
+        if (cbHttpServer.isChecked) {
+            val ip = getLocalIpAddress()
+            tvHttpAddr.text = "局域网地址: http://$ip:${AppConstants.HTTP_PORT}/vod.json"
+            tvHttpAddr.visibility = View.VISIBLE
+        } else {
+            tvHttpAddr.visibility = View.GONE
+        }
+    }
+
+    private fun getLocalIpAddress(): String {
+        return try {
+            val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            val ipInt = wifiManager.connectionInfo.ipAddress
+            if (ipInt == 0) return "127.0.0.1"
+            String.format(
+                "%d.%d.%d.%d",
+                ipInt and 0xff,
+                ipInt shr 8 and 0xff,
+                ipInt shr 16 and 0xff,
+                ipInt shr 24 and 0xff
+            )
+        } catch (e: Exception) {
+            "127.0.0.1"
+        }
     }
 
     private fun refreshPermStatus() {
