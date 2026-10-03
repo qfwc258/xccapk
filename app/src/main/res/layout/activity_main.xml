@@ -281,6 +281,19 @@
             android:buttonTint="@color/cyan"
             android:checked="false"
             android:nextFocusUp="@id/btn_perm"
+            android:nextFocusDown="@id/cb_auto_update"/>
+
+        <CheckBox
+            android:id="@+id/cb_auto_update"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/auto_update"
+            android:textColor="@color/text_body"
+            android:textSize="13sp"
+            android:buttonTint="@color/cyan"
+            android:checked="false"
+            android:nextFocusUp="@id/cb_boot"
             android:nextFocusDown="@id/tv_status"/>
     </LinearLayout>
 

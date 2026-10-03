@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var btnStop: Button
     private lateinit var btnPerm: Button
     private lateinit var cbBoot: CheckBox
+    private lateinit var cbAutoUpdate: CheckBox
     private lateinit var progress: ProgressBar
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
@@ -112,6 +113,12 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             prefs.edit().putBoolean(AppConstants.KEY_BOOT_LAUNCH, checked).apply()
         }
 
+        cbAutoUpdate.isChecked = prefs.getBoolean(AppConstants.KEY_AUTO_UPDATE, false)
+        cbAutoUpdate.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(AppConstants.KEY_AUTO_UPDATE, checked).apply()
+            if (checked) AutoUpdateScheduler.enable(this) else AutoUpdateScheduler.disable(this)
+        }
+
         if (isTvDevice) setupTvControls()
     }
 
@@ -127,6 +134,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnStop = findViewById(R.id.btn_stop)
         btnPerm = findViewById(R.id.btn_perm)
         cbBoot = findViewById(R.id.cb_boot)
+        cbAutoUpdate = findViewById(R.id.cb_auto_update)
         progress = findViewById(R.id.progress)
         tvTitle = findViewById(R.id.tv_title)
         tvSubtitle = findViewById(R.id.tv_subtitle)
@@ -318,7 +326,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             }
         }
         listOfNotNull(
-            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm, cbBoot
+            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm, cbBoot, cbAutoUpdate
         ).forEach { view ->
             view.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false

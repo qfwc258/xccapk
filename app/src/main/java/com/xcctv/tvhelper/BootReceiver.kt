@@ -8,6 +8,10 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
         context ?: return
+
+        // 开机后恢复自动更新调度
+        AutoUpdateScheduler.rescheduleIfNeeded(context)
+
         val enabled = context.getSharedPreferences(AppConstants.PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(AppConstants.KEY_BOOT_LAUNCH, false)
         if (!enabled) return
