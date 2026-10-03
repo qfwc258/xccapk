@@ -34,7 +34,7 @@ class HttpFileServer(
                 try {
                     val socket = ss.accept()
                     Thread({ handleClient(socket) }, "xcctv-http-client").apply {
-                        isDaemon = true
+                        isDaemon = false
                         start()
                     }
                 } catch (_: SocketException) {
@@ -44,7 +44,7 @@ class HttpFileServer(
                 }
             }
         }, "xcctv-http").apply {
-            isDaemon = true
+            isDaemon = false
             start()
         }
     }
