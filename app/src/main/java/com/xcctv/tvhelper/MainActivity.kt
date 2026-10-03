@@ -1,11 +1,13 @@
 package com.xcctv.tvhelper
 
+import android.app.UiModeManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -38,8 +40,11 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     }
 
     private val isTvDevice: Boolean by lazy {
+        val uiMode = getSystemService(UI_MODE_SERVICE) as? UiModeManager
+        val tvMode = uiMode?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
         val pm = packageManager
-        pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+        tvMode ||
+            pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
             pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION) ||
             Build.FINGERPRINT.contains("tv", ignoreCase = true) ||
             !pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
@@ -59,9 +64,9 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     private lateinit var btnStop: Button
     private lateinit var btnPerm: Button
     private lateinit var cbBoot: CheckBox
-    private lateinit var cbAutoUpdate: CheckBox
-    private lateinit var cbHttpServer: CheckBox
-    private lateinit var tvHttpAddr: TextView
+    private var cbAutoUpdate: CheckBox? = null
+    private var cbHttpServer: CheckBox? = null
+    private var tvHttpAddr: TextView? = null
     private lateinit var progress: ProgressBar
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
@@ -80,13 +85,24 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(if (isTvDevice) R.layout.activity_main_tv else R.layout.activity_main)
+        try {
+            setContentView(if (isTvDevice) R.layout.activity_main_tv else R.layout.activity_main)
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "tv layout inflate failed, fallback phone", e)
+            setContentView(R.layout.activity_main)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             window.decorView.defaultFocusHighlightEnabled = false
         }
 
         prefs = getSharedPreferences(AppConstants.PREFS_NAME, MODE_PRIVATE)
-        bindViews()
+        try {
+            bindViews()
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "bindViews failed, fallback phone layout", e)
+            setContentView(R.layout.activity_main)
+            bindViews()
+        }
 
         tvTitle.setText(if (isTvDevice) R.string.title_tv else R.string.title_phone)
         tvSubtitle.setText(R.string.subtitle)
@@ -118,20 +134,32 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             prefs.edit().putBoolean(AppConstants.KEY_BOOT_LAUNCH, checked).apply()
         }
 
-        cbAutoUpdate.isChecked = prefs.getBoolean(AppConstants.KEY_AUTO_UPDATE, false)
-        cbAutoUpdate.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean(AppConstants.KEY_AUTO_UPDATE, checked).apply()
-            if (checked) AutoUpdateScheduler.enable(this) else AutoUpdateScheduler.disable(this)
+        cbAutoUpdate?.let { box ->
+            box.isChecked = prefs.getBoolean(AppConstants.KEY_AUTO_UPDATE, false)
+            box.setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(AppConstants.KEY_AUTO_UPDATE, checked).apply()
+                try {
+                    if (checked) AutoUpdateScheduler.enable(this) else AutoUpdateScheduler.disable(this)
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "auto update toggle failed", e)
+                }
+            }
         }
 
-        cbHttpServer.isChecked = prefs.getBoolean(AppConstants.KEY_HTTP_SERVER, false)
-        updateHttpAddrDisplay()
-        cbHttpServer.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean(AppConstants.KEY_HTTP_SERVER, checked).apply()
-            if (checked) HttpServerService.start(this) else HttpServerService.stop(this)
-            updateHttpAddrDisplay()
+        cbHttpServer?.let { box ->
+            box.isChecked = prefs.getBoolean(AppConstants.KEY_HTTP_SERVER, false)
+            box.setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(AppConstants.KEY_HTTP_SERVER, checked).apply()
+                try {
+                    if (checked) HttpServerService.start(this) else HttpServerService.stop(this)
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "http server toggle failed", e)
+                }
+                updateHttpAddrDisplay()
+            }
         }
-        tvHttpAddr.setOnClickListener { copyHttpAddr() }
+        tvHttpAddr?.setOnClickListener { copyHttpAddr() }
+        updateHttpAddrDisplay()
 
         if (isTvDevice) {
             try {
@@ -154,9 +182,9 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         btnStop = findViewById(R.id.btn_stop)
         btnPerm = findViewById(R.id.btn_perm)
         cbBoot = findViewById(R.id.cb_boot)
-        cbAutoUpdate = findViewById(R.id.cb_auto_update)
-        cbHttpServer = findViewById(R.id.cb_http_server)
-        tvHttpAddr = findViewById(R.id.tv_http_addr)
+        cbAutoUpdate = findViewById<CheckBox>(R.id.cb_auto_update)
+        cbHttpServer = findViewById<CheckBox>(R.id.cb_http_server)
+        tvHttpAddr = findViewById<TextView>(R.id.tv_http_addr)
         progress = findViewById(R.id.progress)
         tvTitle = findViewById(R.id.tv_title)
         tvSubtitle = findViewById(R.id.tv_subtitle)
@@ -348,7 +376,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
             }
         }
         listOfNotNull(
-            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm, cbBoot, cbAutoUpdate, cbHttpServer
+            tileVod, tileJsm, btnPaste, btnClear, btnStart, btnStop, btnPerm,
+            cbBoot, cbAutoUpdate, cbHttpServer, tvHttpAddr
         ).forEach { view ->
             view.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -382,17 +411,23 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         val rows = mutableListOf<List<View>>()
         if (downloading) {
             if (btnStop.isEnabled) rows.add(listOf<View>(btnStop))
-            rows.add(listOf<View>(cbBoot))
+            rows.add(listOfNotNull<View>(cbBoot, cbAutoUpdate, cbHttpServer))
             return rows
         }
         val tiles = listOfNotNull<View>(tileVod, tileJsm)
         if (tiles.isNotEmpty()) rows.add(tiles)
         rows.add(listOf<View>(etUrl, btnPaste, btnClear))
         if (btnStart.isEnabled) rows.add(listOf<View>(btnStart))
+        if (btnStop.isEnabled) rows.add(listOf<View>(btnStop))
         val bottom = mutableListOf<View>()
         if (btnPerm.isEnabled) bottom.add(btnPerm)
         bottom.add(cbBoot)
-        rows.add(bottom)
+        cbAutoUpdate?.let { bottom.add(it) }
+        cbHttpServer?.let { bottom.add(it) }
+        if (bottom.isNotEmpty()) rows.add(bottom)
+        if (tvHttpAddr?.visibility == View.VISIBLE) {
+            rows.add(listOfNotNull<View>(tvHttpAddr))
+        }
         return rows
     }
 
@@ -479,13 +514,14 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     }
 
     private fun updateHttpAddrDisplay() {
-        if (cbHttpServer.isChecked) {
+        val addr = tvHttpAddr ?: return
+        if (cbHttpServer?.isChecked == true) {
             val ip = getLocalIpAddress()
             val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
-            tvHttpAddr.text = "$url  (点击复制)"
-            tvHttpAddr.visibility = View.VISIBLE
+            addr.text = "$url  (点击复制)"
+            addr.visibility = View.VISIBLE
         } else {
-            tvHttpAddr.visibility = View.GONE
+            addr.visibility = View.GONE
         }
     }
 

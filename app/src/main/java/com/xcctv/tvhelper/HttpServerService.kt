@@ -65,15 +65,13 @@ class HttpServerService : Service() {
 
     private fun startServer() {
         if (httpServer != null) return
-        val rootDir = File(AppConstants.ROOT_DIR)
-        if (!rootDir.exists()) rootDir.mkdirs()
-
-        httpServer = HttpFileServer(rootDir, AppConstants.HTTP_PORT).apply { startServer() }
-
         val ip = getLocalIpAddress()
         val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
-
         startForeground(NOTIF_ID, buildNotification(url))
+
+        val rootDir = File(AppConstants.ROOT_DIR)
+        if (!rootDir.exists()) rootDir.mkdirs()
+        httpServer = HttpFileServer(rootDir, AppConstants.HTTP_PORT).apply { startServer() }
     }
 
     private fun stopServer() {
