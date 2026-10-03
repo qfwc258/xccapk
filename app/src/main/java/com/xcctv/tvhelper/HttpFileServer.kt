@@ -43,7 +43,7 @@ class HttpFileServer(
 
     fun startServer() {
         if (wasStarted()) return
-        start(0, true) // 守护线程，不阻塞调用线程
+        start(5000, true) // 守护线程，socket超时5秒，不阻塞调用线程
     }
 
     fun stopServer() {

@@ -47,12 +47,18 @@ class HttpServerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_START -> startServer()
-            ACTION_STOP -> {
-                stopServer()
-                stopSelf()
+        try {
+            when (intent?.action) {
+                ACTION_START -> startServer()
+                ACTION_STOP -> {
+                    stopServer()
+                    stopSelf()
+                }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("HttpServerService", "启动失败: ${e.message}", e)
+            stopServer()
+            stopSelf()
         }
         return START_STICKY
     }
