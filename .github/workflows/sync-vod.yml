@@ -21,7 +21,8 @@ jobs:
           git clone --depth 1 https://github.com/qist/tvbox.git /tmp/src
           rm -rf /tmp/src/.git
           mkdir -p tv
-          rsync -av --delete \
+          # rsync -avI：-I忽略时间戳，强制校验内容；保留exclude，dx.json live.json不会被拉取覆盖
+          rsync -avI --delete \
             --exclude='.github' \
             --exclude='.git' \
             --exclude='*.zip' \
@@ -51,6 +52,8 @@ jobs:
         run: |
           FILE=tv/vod.json
           if [ -f "$FILE" ]; then
+            # 打印lives数组用于调试
+            jq '.lives' "$FILE"
             # 将 lives[] 里面 url="./tv.txt" 修改为 url="./live.json"
             jq '.lives[] |= (if .url == "./tv.txt" then .url = "./live.json" else . end)' "$FILE" > tmp.json
             mv tmp.json "$FILE"
