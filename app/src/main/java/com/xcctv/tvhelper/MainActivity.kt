@@ -87,19 +87,22 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         super.onCreate(savedInstanceState)
         try {
             setContentView(if (isTvDevice) R.layout.activity_main_tv else R.layout.activity_main)
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "tv layout inflate failed, fallback phone", e)
+        } catch (t: Throwable) {
+            android.util.Log.e("MainActivity", "tv layout inflate failed, fallback phone", t)
             setContentView(R.layout.activity_main)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            window.decorView.defaultFocusHighlightEnabled = false
+            try {
+                window.decorView.defaultFocusHighlightEnabled = false
+            } catch (_: Throwable) {
+            }
         }
 
         prefs = getSharedPreferences(AppConstants.PREFS_NAME, MODE_PRIVATE)
         try {
             bindViews()
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "bindViews failed, fallback phone layout", e)
+        } catch (t: Throwable) {
+            android.util.Log.e("MainActivity", "bindViews failed, fallback phone layout", t)
             setContentView(R.layout.activity_main)
             bindViews()
         }
@@ -140,8 +143,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                 prefs.edit().putBoolean(AppConstants.KEY_AUTO_UPDATE, checked).apply()
                 try {
                     if (checked) AutoUpdateScheduler.enable(this) else AutoUpdateScheduler.disable(this)
-                } catch (e: Exception) {
-                    android.util.Log.e("MainActivity", "auto update toggle failed", e)
+                } catch (t: Throwable) {
+                    android.util.Log.e("MainActivity", "auto update toggle failed", t)
                 }
             }
         }
@@ -164,9 +167,23 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
         if (isTvDevice) {
             try {
                 setupTvControls()
-            } catch (e: Exception) {
-                android.util.Log.e("MainActivity", "setupTvControls failed: ${e.message}", e)
+            } catch (t: Throwable) {
+                android.util.Log.e("MainActivity", "setupTvControls failed: ${t.message}", t)
             }
+        }
+        window.decorView.post { restoreBackgroundServices() }
+    }
+
+    private fun restoreBackgroundServices() {
+        try {
+            if (cbAutoUpdate?.isChecked == true) AutoUpdateScheduler.enable(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("MainActivity", "restore auto update failed", t)
+        }
+        try {
+            if (cbHttpServer?.isChecked == true) HttpServerService.start(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("MainActivity", "restore http server failed", t)
         }
     }
 

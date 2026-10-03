@@ -21,7 +21,13 @@ class HttpFileServer(
     fun startServer() {
         if (running) return
         running = true
-        val ss = ServerSocket(port)
+        val ss = try {
+            ServerSocket(port)
+        } catch (t: Throwable) {
+            running = false
+            android.util.Log.e("HttpFileServer", "bind $port failed", t)
+            return
+        }
         serverSocket = ss
         acceptThread = Thread({
             while (running) {

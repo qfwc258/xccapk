@@ -78,12 +78,14 @@ class HttpServerService : Service() {
     }
 
     private fun startServer() {
-        val ip = getLocalIpAddress()
-        val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
-        try {
-            startForeground(NOTIF_ID, buildNotification(url))
-        } catch (t: Throwable) {
-            android.util.Log.e("HttpServerService", "startForeground failed", t)
+        if (Build.VERSION.SDK_INT >= 31) {
+            val ip = getLocalIpAddress()
+            val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
+            try {
+                startForeground(NOTIF_ID, buildNotification(url))
+            } catch (t: Throwable) {
+                android.util.Log.e("HttpServerService", "startForeground failed", t)
+            }
         }
         if (httpServer != null) return
         val rootDir = resolveRootDir(this)
