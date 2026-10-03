@@ -12,15 +12,15 @@ class BootReceiver : BroadcastReceiver() {
         val prefs = context.getSharedPreferences(AppConstants.PREFS_NAME, Context.MODE_PRIVATE)
         try {
             AutoUpdateScheduler.rescheduleIfNeeded(context)
-        } catch (e: Exception) {
-            android.util.Log.e("BootReceiver", "auto update reschedule failed", e)
+        } catch (t: Throwable) {
+            android.util.Log.e("BootReceiver", "auto update reschedule failed", t)
         }
         try {
             if (prefs.getBoolean(AppConstants.KEY_HTTP_SERVER, false)) {
                 HttpServerService.start(context)
             }
-        } catch (e: Exception) {
-            android.util.Log.e("BootReceiver", "http server start failed", e)
+        } catch (t: Throwable) {
+            android.util.Log.e("BootReceiver", "http server start failed", t)
         }
 
         val enabled = prefs.getBoolean(AppConstants.KEY_BOOT_LAUNCH, false)

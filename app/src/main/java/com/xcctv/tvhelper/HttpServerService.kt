@@ -10,11 +10,9 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import java.io.File
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
-/**
- * 局域网 HTTP 源服务（前台 Service，保证后台不被杀）
- */
 class HttpServerService : Service() {
 
     companion object {
@@ -27,10 +25,19 @@ class HttpServerService : Service() {
             val intent = Intent(context, HttpServerService::class.java).apply {
                 action = ACTION_START
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("HttpServerService", "startForegroundService failed", t)
+                try {
+                    context.startService(intent)
+                } catch (t2: Throwable) {
+                    android.util.Log.e("HttpServerService", "startService failed", t2)
+                }
             }
         }
 
@@ -38,7 +45,11 @@ class HttpServerService : Service() {
             val intent = Intent(context, HttpServerService::class.java).apply {
                 action = ACTION_STOP
             }
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (t: Throwable) {
+                android.util.Log.e("HttpServerService", "stop failed", t)
+            }
         }
     }
 
@@ -49,39 +60,52 @@ class HttpServerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         try {
             when (intent?.action) {
-                ACTION_START -> startServer()
                 ACTION_STOP -> {
                     stopServer()
                     stopSelf()
                 }
+                else -> startServer()
             }
-        } catch (e: Exception) {
-            android.util.Log.e("HttpServerService", "启动失败: ${e.message}", e)
-            stopServer()
+        } catch (t: Throwable) {
+            android.util.Log.e("HttpServerService", "onStartCommand failed", t)
+            try {
+                stopServer()
+            } catch (_: Throwable) {
+            }
             stopSelf()
         }
         return START_STICKY
     }
 
     private fun startServer() {
-        if (httpServer != null) return
         val ip = getLocalIpAddress()
         val url = "http://$ip:${AppConstants.HTTP_PORT}/vod.json"
-        startForeground(NOTIF_ID, buildNotification(url))
-
-        val rootDir = File(AppConstants.ROOT_DIR)
+        try {
+            startForeground(NOTIF_ID, buildNotification(url))
+        } catch (t: Throwable) {
+            android.util.Log.e("HttpServerService", "startForeground failed", t)
+        }
+        if (httpServer != null) return
+        val rootDir = resolveRootDir(this)
         if (!rootDir.exists()) rootDir.mkdirs()
         httpServer = HttpFileServer(rootDir, AppConstants.HTTP_PORT).apply { startServer() }
     }
 
     private fun stopServer() {
-        httpServer?.stopServer()
+        try {
+            httpServer?.stopServer()
+        } catch (t: Throwable) {
+            android.util.Log.e("HttpServerService", "stopServer failed", t)
+        }
         httpServer = null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -101,15 +125,34 @@ class HttpServerService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("XCCTV 局域网源服务运行中")
             .setContentText("TVBox 填: $url")
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     private fun getLocalIpAddress(): String {
+        try {
+            val en = NetworkInterface.getNetworkInterfaces()
+            if (en != null) {
+                for (ni in en) {
+                    if (!ni.isUp || ni.isLoopback) continue
+                    val addrs = ni.inetAddresses
+                    while (addrs.hasMoreElements()) {
+                        val addr = addrs.nextElement()
+                        if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                            val host = addr.hostAddress ?: continue
+                            if (host.startsWith("127.")) continue
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        }
         return try {
             val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            @Suppress("DEPRECATION")
             val ipInt = wifiManager.connectionInfo.ipAddress
             if (ipInt == 0) return "127.0.0.1"
             String.format(
@@ -119,7 +162,7 @@ class HttpServerService : Service() {
                 ipInt shr 16 and 0xff,
                 ipInt shr 24 and 0xff
             )
-        } catch (e: Exception) {
+        } catch (_: Throwable) {
             "127.0.0.1"
         }
     }

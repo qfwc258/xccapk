@@ -152,8 +152,8 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                 prefs.edit().putBoolean(AppConstants.KEY_HTTP_SERVER, checked).apply()
                 try {
                     if (checked) HttpServerService.start(this) else HttpServerService.stop(this)
-                } catch (e: Exception) {
-                    android.util.Log.e("MainActivity", "http server toggle failed", e)
+                } catch (t: Throwable) {
+                    android.util.Log.e("MainActivity", "http server toggle failed", t)
                 }
                 updateHttpAddrDisplay()
             }
@@ -534,8 +534,27 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
     }
 
     private fun getLocalIpAddress(): String {
+        try {
+            val en = java.net.NetworkInterface.getNetworkInterfaces()
+            if (en != null) {
+                for (ni in en) {
+                    if (!ni.isUp || ni.isLoopback) continue
+                    val addrs = ni.inetAddresses
+                    while (addrs.hasMoreElements()) {
+                        val addr = addrs.nextElement()
+                        if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                            val host = addr.hostAddress ?: continue
+                            if (host.startsWith("127.")) continue
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        }
         return try {
             val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            @Suppress("DEPRECATION")
             val ipInt = wifiManager.connectionInfo.ipAddress
             if (ipInt == 0) return "127.0.0.1"
             String.format(
@@ -545,7 +564,7 @@ class MainActivity : AppCompatActivity(), DownloadProgressListener {
                 ipInt shr 16 and 0xff,
                 ipInt shr 24 and 0xff
             )
-        } catch (e: Exception) {
+        } catch (_: Throwable) {
             "127.0.0.1"
         }
     }
