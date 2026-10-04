@@ -209,6 +209,8 @@ public class WebServer {
                 sendJson(s, apiSubsRefresh());
             } else if (path.startsWith("/api/proxytest")) {
                 sendJson(s, apiProxyTest());
+            } else if (path.startsWith("/api/live")) {
+                sendJson(s, apiLive());
             } else if (path.startsWith("/api/pass/set")) {
                 sendJson(s, apiPassSet(body));
             } else if (path.startsWith("/api/pass/off")) {
@@ -450,6 +452,101 @@ public class WebServer {
         }
         hub.startProxy();
         return json(true, "正在重新下载订阅并重启内核…请稍后看概览页内核日志");
+    }
+
+    /**
+     * 实时连接状态：转发内核 :9090/connections，聚合为 当前出口节点/活动连接数/累计上下行。
+     * 速率由前端按两次轮询差值计算。
+     */
+    private String apiLive() {
+        String secret = Prefs.get(ctx).getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
+        String body = ctrlGet("/connections", secret);
+        long up = 0, down = 0;
+        int conns = 0;
+        String node = "";
+        java.util.HashMap<String, Integer> cnt = new java.util.HashMap<String, Integer>();
+        if (body != null) {
+            try {
+                JSONObject o = new JSONObject(body);
+                up = o.optLong("uploadTotal", 0);
+                down = o.optLong("downloadTotal", 0);
+                JSONArray cs = o.optJSONArray("connections");
+                conns = cs == null ? 0 : cs.length();
+                for (int i = 0; i < conns; i++) {
+                    JSONObject c = cs.optJSONObject(i);
+                    if (c == null) {
+                        continue;
+                    }
+                    JSONArray chain = c.optJSONArray("chains");
+                    if (chain == null) {
+                        continue;
+                    }
+                    for (int k = 0; k < chain.length(); k++) {
+                        String seg = chain.optString(k, "");
+                        if (seg.length() > 0 && !"PROXY".equals(seg) && !"自动选择".equals(seg)) {
+                            Integer v = cnt.get(seg);
+                            cnt.put(seg, v == null ? 1 : v + 1);
+                            break;
+                        }
+                    }
+                }
+                int best = 0;
+                for (Map.Entry<String, Integer> e : cnt.entrySet()) {
+                    if (e.getValue() > best) {
+                        best = e.getValue();
+                        node = e.getKey();
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return "{\"ok\":true,\"running\":" + hub.isProxyRunning()
+                + ",\"conns\":" + conns
+                + ",\"up\":" + up + ",\"down\":" + down
+                + ",\"node\":\"" + esc(node) + "\"}";
+    }
+
+    /** 内核控制接口原始 GET，返回 body 或 null */
+    private String ctrlGet(String path, String secret) {
+        java.net.Socket s = null;
+        try {
+            s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
+            s.setSoTimeout(1500);
+            java.io.OutputStream os = s.getOutputStream();
+            String req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
+                    + "Connection: close\r\n\r\n";
+            os.write(req.getBytes(StandardCharsets.UTF_8));
+            os.flush();
+            BufferedReader r = new BufferedReader(
+                    new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            String l;
+            boolean headDone = false;
+            while ((l = r.readLine()) != null) {
+                if (!headDone) {
+                    if (l.isEmpty()) {
+                        headDone = true;
+                    }
+                    continue;
+                }
+                sb.append(l).append('\n');
+                if (sb.length() > 4 * 1024 * 1024) {
+                    break;
+                }
+            }
+            return sb.length() > 0 ? sb.toString() : null;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            try {
+                if (s != null) {
+                    s.close();
+                }
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     /** 连通性测试：经本机 7890 代理访问 gstatic generate_204 */

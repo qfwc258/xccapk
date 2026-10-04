@@ -65,6 +65,10 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
 <div class="page on" id=ov-page>
   <div class=box id=ov>加载中…</div>
   <div class=box>
+    <div class=mut>实时连接（每 2 秒刷新）</div>
+    <div id=live style="margin-top:6px;font-size:14px;line-height:1.8">等待内核启动…</div>
+  </div>
+  <div class=box>
     <div class=mut>代理连通性测试（经本机 :7890 访问 gstatic 204，验证代理是否真正可用）</div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
       <button class=b-blu onclick=proxyTest() style="width:auto;margin:0">测试</button>
@@ -224,6 +228,25 @@ function proxyTest(){
   $('pt_msg').textContent='测试中…（最长约 12 秒）';
   get('/api/proxytest').then(j=>{ $('pt_msg').textContent=j.msg; $('pt_msg').style.color=j.ok?'var(--grn)':'var(--red)'; });
 }
+
+/* ---------------- 实时连接 ---------------- */
+var lastUp=0,lastDown=0,lastT=0;
+function fmtSpeed(b){ b=Math.max(0,b||0); return b>=1048576?(b/1048576).toFixed(2)+' MB/s':b>=1024?(b/1024).toFixed(1)+' KB/s':Math.round(b)+' B/s'; }
+function pollLive(){
+  get('/api/live').then(j=>{
+    var now=Date.now(), rate='';
+    if(lastT && j.up>=lastUp && j.down>=lastDown){
+      var dt=(now-lastT)/1000;
+      rate='　<span class=mut>↑</span>'+fmtSpeed((j.up-lastUp)/dt)+'　<span class=mut>↓</span>'+fmtSpeed((j.down-lastDown)/dt);
+    }
+    lastUp=j.up||0; lastDown=j.down||0; lastT=now;
+    if(!j.running){ $('live').innerHTML='<span class=mut>代理未启动</span>'; return; }
+    if(!j.conns){ $('live').innerHTML='<b>出口节点：</b>—（尚无流量）'+rate
+      +'<div class=mut style="margin-top:4px">代理已就绪。让手机/播放器把 HTTP 代理指向 <code>电视IP:7890</code> 即会出现连接。</div>'; return; }
+    $('live').innerHTML='<b>出口节点：</b><code>'+esc(j.node||'未知')+'</code>　<b>活动连接：</b>'+j.conns+rate;
+  }).catch(()=>{ $('live').textContent='状态获取失败'; });
+}
+setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='ov') pollLive(); },2000);
 function passSet(){
   post('/api/pass/set','pw='+encodeURIComponent($('pass_pw').value))
     .then(j=>{ $('pass_msg').textContent=j.msg; if(j.ok){$('pass_pw').value='';} });
@@ -260,6 +283,7 @@ function loadDash(){
 
 loadInfo();
 loadSubs();
+pollLive();
 setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='ov') loadInfo(); },5000);
 setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='src') pollSrc(); },2000);
 </script>

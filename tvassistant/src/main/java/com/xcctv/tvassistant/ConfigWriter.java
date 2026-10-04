@@ -259,11 +259,20 @@ public final class ConfigWriter {
         return b;
     }
 
-    /** 订阅模式的公共尾部（策略组 + 规则） */
+    /** 订阅模式的公共尾部（策略组 + 规则）。双层组：自动选择(url-test) + PROXY(select，默认自动) */
     private static void commonTail(StringBuilder b) {
         b.append("proxy-groups:\n");
+        b.append("  - name: 自动选择\n");
+        b.append("    type: url-test\n");
+        b.append("    use:\n");
+        b.append("      - SUB\n");
+        b.append("    url: https://www.gstatic.com/generate_204\n");
+        b.append("    interval: 300\n");
+        b.append("    tolerance: 50\n");
         b.append("  - name: PROXY\n");
         b.append("    type: select\n");
+        b.append("    proxies:\n");
+        b.append("      - 自动选择\n");
         b.append("    use:\n");
         b.append("      - SUB\n");
         b.append("rules:\n");
