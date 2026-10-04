@@ -24,7 +24,7 @@ public final class Net {
     private static void logFail(String what, Exception e) {
         Logger l = logger;
         if (l != null) {
-            l.log("⚠ 内核API " + what + " 失败: " + e);
+            l.log("⚠ 内核API " + what + (e == null ? "" : " 失败: " + e));
         }
     }
 
