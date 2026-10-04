@@ -65,14 +65,14 @@ android {
         }
     }
 
-    // 输出 APK 按 "TV助手-v版本-ABI-类型.apk" 重命名（ABI 来自 -P ABI_FILTERS）
+    // 输出 APK 按 "TVAssistant-v版本-ABI-类型.apk" 重命名（ABI 来自 -P ABI_FILTERS；用 ASCII 便于下载）
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             if (output.outputFileName) {
                 def abi = project.hasProperty('ABI_FILTERS')
                         ? project.property('ABI_FILTERS').toString().replace('|', '_')
                         : 'all'
-                output.outputFileName = "TV助手-${variant.versionName}-${abi}-${variant.buildType.name}.apk"
+                output.outputFileName = "TVAssistant-${variant.versionName}-${abi}-${variant.buildType.name}.apk"
             }
         }
     }
