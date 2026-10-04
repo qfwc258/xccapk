@@ -494,7 +494,7 @@ public class WebServer {
         }
 
         // 2) 连接数与累计流量
-        String body = ctrlGet("/connections", secret);
+        String body = Net.ctrlGet("/connections", secret, 3000);
         if (body != null) {
             try {
                 JSONObject o = new JSONObject(body);
@@ -589,49 +589,6 @@ public class WebServer {
             return java.net.URLEncoder.encode(s, "UTF-8");
         } catch (Exception e) {
             return s;
-        }
-    }
-
-    /** 内核控制接口原始 GET，返回 body 或 null */
-    private String ctrlGet(String path, String secret) {
-        java.net.Socket s = null;
-        try {
-            s = new java.net.Socket();
-            s.connect(new java.net.InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
-            s.setSoTimeout(1500);
-            java.io.OutputStream os = s.getOutputStream();
-            String req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
-                    + "Connection: close\r\n\r\n";
-            os.write(req.getBytes(StandardCharsets.UTF_8));
-            os.flush();
-            BufferedReader r = new BufferedReader(
-                    new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            String l;
-            boolean headDone = false;
-            while ((l = r.readLine()) != null) {
-                if (!headDone) {
-                    if (l.isEmpty()) {
-                        headDone = true;
-                    }
-                    continue;
-                }
-                sb.append(l).append('\n');
-                if (sb.length() > 4 * 1024 * 1024) {
-                    break;
-                }
-            }
-            return sb.length() > 0 ? sb.toString() : null;
-        } catch (Exception e) {
-            return null;
-        } finally {
-            try {
-                if (s != null) {
-                    s.close();
-                }
-            } catch (Exception ignored) {
-            }
         }
     }
 

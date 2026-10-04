@@ -60,78 +60,58 @@ public final class Net {
         }
     }
 
-    /** 调内核 external-controller 的 GET 接口，返回 body（已去掉 HTTP 头）或 null */
+    /** 调内核 external-controller 的 GET 接口，返回 body 或 null。
+     *  必须用 HttpURLConnection：内核对大响应（如整组节点列表）用 chunked 编码，
+     *  手写 Socket 解析会把 chunk 长度行混进 JSON 导致解析失败（v1.6 及之前自愈失效的根源）。 */
     public static String ctrlGet(String path, String secret, int readTimeoutMs) {
-        Socket s = new Socket();
         try {
-            s.connect(new InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
-            s.setSoTimeout(readTimeoutMs);
-            java.io.OutputStream os = s.getOutputStream();
-            String req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
-                    + "Connection: close\r\n\r\n";
-            os.write(req.getBytes("UTF-8"));
-            os.flush();
-            java.io.BufferedReader r = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(s.getInputStream(), "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String l;
-            boolean headDone = false;
-            while ((l = r.readLine()) != null) {
-                if (!headDone) {
-                    if (l.isEmpty()) {
-                        headDone = true;
-                    }
-                    continue;
-                }
-                sb.append(l).append('\n');
-                if (sb.length() > 4 * 1024 * 1024) {
-                    break;
-                }
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                    new java.net.URL("http://127.0.0.1:" + ConfigWriter.CTRL_PORT + path)
+                            .openConnection();
+            c.setConnectTimeout(1200);
+            c.setReadTimeout(readTimeoutMs);
+            c.setRequestProperty("Authorization", "Bearer " + (secret == null ? "" : secret));
+            int code = c.getResponseCode();
+            java.io.InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            if (in == null) {
+                return null;
             }
-            return sb.length() > 0 ? sb.toString() : null;
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(in, "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            char[] buf = new char[8192];
+            int n;
+            while ((n = r.read(buf)) > 0 && sb.length() < 4 * 1024 * 1024) {
+                sb.append(buf, 0, n);
+            }
+            r.close();
+            return code < 400 && sb.length() > 0 ? sb.toString() : null;
         } catch (Exception e) {
             return null;
-        } finally {
-            try {
-                s.close();
-            } catch (Exception ignored) {
-            }
         }
     }
 
     /** 调内核 external-controller 的 PUT 接口（如切换策略组选中项），返回 HTTP 状态码或 -1 */
     public static int ctrlPut(String path, String jsonBody, String secret, int readTimeoutMs) {
-        Socket s = new Socket();
         try {
-            s.connect(new InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
-            s.setSoTimeout(readTimeoutMs);
-            java.io.OutputStream os = s.getOutputStream();
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                    new java.net.URL("http://127.0.0.1:" + ConfigWriter.CTRL_PORT + path)
+                            .openConnection();
+            c.setConnectTimeout(1200);
+            c.setReadTimeout(readTimeoutMs);
+            c.setRequestMethod("PUT");
+            c.setDoOutput(true);
+            c.setRequestProperty("Authorization", "Bearer " + (secret == null ? "" : secret));
+            c.setRequestProperty("Content-Type", "application/json");
             byte[] b = jsonBody == null ? new byte[0] : jsonBody.getBytes("UTF-8");
-            String req = "PUT " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
-                    + "Content-Type: application/json\r\n"
-                    + "Content-Length: " + b.length + "\r\n"
-                    + "Connection: close\r\n\r\n";
-            os.write(req.getBytes("UTF-8"));
+            c.setFixedLengthStreamingMode(b.length);
+            java.io.OutputStream os = c.getOutputStream();
             os.write(b);
             os.flush();
-            java.io.BufferedReader r = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(s.getInputStream(), "UTF-8"));
-            String status = r.readLine();
-            if (status == null) {
-                return -1;
-            }
-            // "HTTP/1.1 204 No Content" → 204
-            String[] parts = status.split(" ");
-            return parts.length > 1 ? Integer.parseInt(parts[1].trim()) : -1;
+            os.close();
+            return c.getResponseCode();
         } catch (Exception e) {
             return -1;
-        } finally {
-            try {
-                s.close();
-            } catch (Exception ignored) {
-            }
         }
     }
 }

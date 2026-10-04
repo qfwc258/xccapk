@@ -407,32 +407,15 @@ public class CoreService extends Service implements WebServer.Control {
 
     /** 探测 external-controller /version，返回 version 字符串或 null */
     private String ctrlVersion(String secret) {
-        try {
-            java.net.Socket s = new java.net.Socket();
-            s.connect(new java.net.InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
-            java.io.OutputStream os = s.getOutputStream();
-            String req = "GET /version HTTP/1.1\r\nHost: 127.0.0.1\r\n"
-                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
-                    + "Connection: close\r\n\r\n";
-            os.write(req.getBytes("UTF-8"));
-            os.flush();
-            BufferedReader r = new BufferedReader(
-                    new InputStreamReader(s.getInputStream(), "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String l;
-            while ((l = r.readLine()) != null && sb.length() < 600) {
-                sb.append(l).append('\n');
-            }
-            s.close();
-            String body = sb.toString();
-            int i = body.indexOf("version");
-            if (i >= 0) {
-                return "v" + body.replaceAll(".*\"version\"\\s*:\\s*\"([^\"]+)\".*", "$1");
-            }
-            return null;
-        } catch (Exception e) {
+        String body = Net.ctrlGet("/version", secret, 1500);
+        if (body == null) {
             return null;
         }
+        int i = body.indexOf("version");
+        if (i >= 0) {
+            return "v" + body.replaceAll(".*\"version\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+        }
+        return null;
     }
 
     /** 最近一次自动重测时间戳（防抖：60 秒内只触发一次） */
@@ -511,6 +494,7 @@ public class CoreService extends Service implements WebServer.Control {
     public static String ensureAutoSelect(String secret) {
         String p = Net.ctrlGet("/proxies/" + enc("PROXY"), secret, 3000);
         if (p == null) {
+            CoreService.log("⚠ 读取 PROXY 组状态失败（内核未就绪或接口异常），跳过出口自愈");
             return null;
         }
         String now;
