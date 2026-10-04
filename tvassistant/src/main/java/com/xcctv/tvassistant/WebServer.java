@@ -524,6 +524,7 @@ public class WebServer {
                 + ",\"conns\":" + conns
                 + ",\"up\":" + up + ",\"down\":" + down
                 + ",\"delay\":" + delay
+                + ",\"retest\":\"" + esc(CoreService.lastRetestInfo) + "\""
                 + ",\"node\":\"" + esc(node == null ? "" : node) + "\"}";
     }
 
@@ -559,8 +560,11 @@ public class WebServer {
         } catch (Exception ignored) {
         }
         if (okCnt == 0) {
-            return json(false, "重测完成：无任何节点可用（订阅可能已失效，请更新订阅）");
+            CoreService.lastRetestInfo = "0 个节点可用";
+            return json(false, "重测完成：无任何节点可用（订阅已失效/被墙，请更新订阅或更换机场）");
         }
+        CoreService.lastRetestInfo = "可用 " + okCnt + " 个，最快「" + node + "」"
+                + (best < Integer.MAX_VALUE ? " " + best + "ms" : "");
         return json(true, "重测完成：" + okCnt + " 个节点可用，最快「" + node + "」"
                 + (best < Integer.MAX_VALUE ? " " + best + "ms" : "") + "，已自动切换");
     }
@@ -637,9 +641,27 @@ public class WebServer {
             return "{\"ok\":false,\"msg\":\"代理可达但应答异常 HTTP " + code + "（" + ms + "ms）\"}";
         } catch (Exception e) {
             long ms = System.currentTimeMillis() - t0;
+            String lastErr = lastCoreDialError();
             return "{\"ok\":false,\"msg\":\"✗ 测试失败（" + ms + "ms）："
-                    + String.valueOf(e.getMessage()).replace("\"", "'") + "」}";
+                    + String.valueOf(e.getMessage()).replace("\"", "'") + "」"
+                    + ",\"kerr\":\"" + esc(lastErr) + "\"}";
         }
+    }
+
+    /** 从内核日志里取最后一条出站错误（截 error: 之后的内容，给用户看原因） */
+    private static String lastCoreDialError() {
+        String tail = CoreService.tail(30);
+        String last = "";
+        for (String ln : tail.split("\n")) {
+            int i = ln.indexOf("error:");
+            if (i >= 0) {
+                last = ln.substring(i + 6).trim();
+            }
+        }
+        if (last.length() > 160) {
+            last = last.substring(0, 160) + "…";
+        }
+        return last.replace("'", "").replace("\n", " ");
     }
 
     // ---------------------------------------------------------- 其它 API

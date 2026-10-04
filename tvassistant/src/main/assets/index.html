@@ -229,8 +229,11 @@ function proxyStart(){ post('/api/proxy/start','').then(j=>{ $('pr_msg').textCon
 function proxyStop(){ post('/api/proxy/stop','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
 function subRefresh(){ $('pr_msg').textContent='正在更新订阅…'; post('/api/subs/refresh','').then(j=>{ $('pr_msg').textContent=j.msg; setTimeout(loadInfo,3000); }); }
 function proxyTest(){
-  $('pt_msg').textContent='测试中…（最长约 12 秒）';
-  get('/api/proxytest').then(j=>{ $('pt_msg').textContent=j.msg; $('pt_msg').style.color=j.ok?'var(--grn)':'var(--red)'; });
+  $('pt_msg').textContent='测试中…（最长约 12 秒）'; $('pt_msg').style.color='';
+  get('/api/proxytest').then(j=>{
+    $('pt_msg').textContent=j.msg+(j.kerr?'　内核: '+j.kerr:'');
+    $('pt_msg').style.color=j.ok?'var(--grn)':'var(--red)';
+  });
 }
 
 /* ---------------- 实时连接 ---------------- */
@@ -250,10 +253,11 @@ function pollLive(){
     lastUp=j.up||0; lastDown=j.down||0; lastT=now;
     if(!j.running){ $('live').innerHTML='<span class=mut>代理未启动</span>'; return; }
     var dl = j.delay>0 ? ' <span class=mut>('+j.delay+'ms)</span>' : '';
-    if(!j.conns){ $('live').innerHTML='<b>出口节点：</b>'+esc(j.node||'—')+dl+'（尚无流量）'+rate
+    var rt = j.retest ? '<div class=mut style="margin-top:4px">上次重测：'+esc(j.retest)+'</div>' : '';
+    if(!j.conns){ $('live').innerHTML='<b>出口节点：</b>'+esc(j.node||'—')+dl+'（尚无流量）'+rate+rt
       +'<div class=mut style="margin-top:4px">代理已就绪。让手机/播放器把 HTTP 代理指向 <code>电视IP:7890</code> 即会出现连接。</div>'; return; }
     $('live').innerHTML='<b>出口节点：</b><code>'+esc(j.node||'未知')+'</code>'+dl
-      +'　<b>活动连接：</b>'+j.conns+rate;
+      +'　<b>活动连接：</b>'+j.conns+rate+rt;
   }).catch(()=>{ $('live').textContent='状态获取失败'; });
 }
 setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='ov') pollLive(); },2000);

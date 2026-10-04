@@ -12,6 +12,8 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
@@ -312,11 +314,22 @@ public class CoreService extends Service implements WebServer.Control {
                     String l;
                     while ((l = r.readLine()) != null) {
                         log(l);
-                        // 订阅里的 VMess 节点若服务端开了「动态端口」，mihomo 不支持
-                        //（transport/vmess: "dynamic port is not supported now"），
-                        // 且 url-test 不会因拨号失败立即换节点 —— 这里自动整组重测把它淘汰。
+                        // 两类错误都要自动整组重测换节点（url-test 不会因 dial 失败自动换）：
+                        // a) VMess 动态端口（内核不支持，必失败）
+                        // b) 出站拨号失败：节点被墙/失效（i/o timeout、connect error、refused…）
                         if (l.contains("dynamic port is not supported")) {
                             retestGroup("订阅 VMess 节点开了动态端口（内核不支持，连接必失败）");
+                        } else if (l.contains("error:")
+                                && (l.contains("dial tcp") || l.contains("connect error")
+                                        || l.contains("i/o timeout") || l.contains("connection refused")
+                                        || l.contains("no route") || l.contains("unreachable"))) {
+                            dialErrStreak++;
+                            if (dialErrStreak >= 3) {
+                                retestGroup("连续 " + dialErrStreak
+                                        + " 次出站拨号失败（当前节点可能被墙/失效）");
+                            }
+                        } else if (l.contains("level=info")) {
+                            dialErrStreak = 0;
                         }
                     }
                 } catch (Exception ignored) {
@@ -418,9 +431,16 @@ public class CoreService extends Service implements WebServer.Control {
     /** 最近一次自动重测时间戳（防抖：60 秒内只触发一次） */
     private static volatile long lastRetest = 0;
 
+    /** 连续出站拨号失败计数（reader 线程维护） */
+    private static volatile int dialErrStreak = 0;
+
+    /** 最近一次整组重测结果摘要（网页概览显示） */
+    public static volatile String lastRetestInfo = "";
+
     /**
      * 整组重测「自动选择」：调内核 /group/自动选择/delay，
-     * 重测后 url-test 按最新延迟改选最快**可用**节点，坏节点（如动态端口 VMess）自动淘汰。
+     * 重测后 url-test 按最新延迟改选最快**可用**节点，坏节点自动淘汰。
+     * 统计可用节点数：0 个可用时明确提示订阅失效。
      */
     private void retestGroup(String reason) {
         long now = System.currentTimeMillis();
@@ -440,8 +460,36 @@ public class CoreService extends Service implements WebServer.Control {
             log("✗ 重测无应答（内核忙或已退出），可在网页概览点「重测节点」再试");
             return;
         }
+        int ok = 0;
+        long best = Long.MAX_VALUE;
+        String bestName = "";
+        try {
+            JSONObject o = new JSONObject(r);
+            java.util.Iterator<String> it = o.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                int d = o.optInt(k, 0);
+                if (d > 0) {
+                    ok++;
+                    if (d < best) {
+                        best = d;
+                        bestName = k;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (ok == 0) {
+            lastRetestInfo = "0 个节点可用";
+            log("✗ 重测完成：没有任何节点可达——订阅节点已全部被墙/失效（免费订阅很常见）。"
+                    + "请在网页「代理」页更新订阅地址或更换机场");
+            return;
+        }
+        lastRetestInfo = "可用 " + ok + " 个，最快「" + bestName + "」" + best + "ms";
         String cur = currentGroupNode(secret);
-        log("✓ 重测完成，自动选择 → " + (cur == null || cur.isEmpty() ? "未知" : cur));
+        log("✓ 重测完成：" + lastRetestInfo + "，自动选择 → "
+                + (cur == null || cur.isEmpty() ? "未知" : cur));
+        dialErrStreak = 0;
         refreshNotification();
     }
 
