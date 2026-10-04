@@ -136,16 +136,86 @@ public final class ConfigWriter {
         return b.toString();
     }
 
-    /** 生成可直接写给内核的完整配置 */
+    /** 生成可直接写给内核的完整配置（旧接口，订阅模式走内核自拉） */
     public static String build(String input, boolean lan, String secret) {
         String s = normalize(input);
         if (isUrl(s)) {
-            return subscription(s, lan, secret);
+            return subscriptionHttp(s, lan, secret);
         }
         return mergeWithYaml(s, lan, secret);
     }
 
-    private static String subscription(String url, boolean lan, String secret) {
+    /**
+     * 推荐入口：URL 先由 App 抓取并清洗非法 client-fingerprint，落盘为本地 provider；
+     * 抓取失败但有本地缓存则继续用缓存；两者皆无才回退让内核自拉（旧模式）。
+     * 返回 [完整配置, 给用户看的结果说明]。
+     */
+    public static String[] buildSmart(Context c, String input, boolean lan, String secret) {
+        String s = normalize(input);
+        if (isUrl(s)) {
+            String fetched = SubFetcher.fetch(s);
+            if (fetched != null) {
+                String clean = SubFetcher.sanitize(fetched);
+                String err = SubFetcher.writeProvider(c, clean);
+                if (err == null) {
+                    String note = SubFetcher.lastFixes > 0
+                            ? "订阅已更新（修正 " + SubFetcher.lastFixes + " 处非法 client-fingerprint → chrome）"
+                            : "订阅已更新（指纹正常，未做修改）";
+                    return new String[]{subscriptionFile(lan, secret, s), note};
+                }
+                return new String[]{subscriptionHttp(s, lan, secret),
+                        "⚠ 订阅缓存写入失败(" + err + ")，改由内核自拉"};
+            }
+            File pf = SubFetcher.providerFile(c);
+            if (pf.exists() && pf.length() > 0) {
+                return new String[]{subscriptionFile(lan, secret, s),
+                        "⚠ 订阅在线下载失败，使用本地缓存的订阅"};
+            }
+            return new String[]{subscriptionHttp(s, lan, secret),
+                    "⚠ 订阅下载失败且无本地缓存，改由内核自行拉取"};
+        }
+        return new String[]{mergeWithYaml(SubFetcher.sanitize(s), lan, secret),
+                "已应用自定义 YAML" + (SubFetcher.lastFixes > 0
+                        ? "（修正 " + SubFetcher.lastFixes + " 处非法 client-fingerprint）" : "")};
+    }
+
+    /** 订阅模式 · 首选：App 已把清洗后的订阅写到本地，内核直接读文件（健康检查仍生效） */
+    private static String subscriptionFile(boolean lan, String secret, String url) {
+        StringBuilder b = commonHead(lan, secret);
+        b.append("proxy-providers:\n");
+        b.append("  SUB:\n");
+        b.append("    type: file\n");
+        b.append("    path: ./providers/sub.yaml\n");
+        b.append("    health-check:\n");
+        b.append("      enable: true\n");
+        b.append("      url: https://www.gstatic.com/generate_204\n");
+        b.append("      interval: 300\n");
+        commonTail(b);
+        return b.toString();
+    }
+
+    /** 订阅模式 · 回退：内核自己去拉（无法修正订阅里的非法指纹） */
+    private static String subscriptionHttp(String url, boolean lan, String secret) {
+        StringBuilder b = commonHead(lan, secret);
+        b.append("proxy-providers:\n");
+        b.append("  SUB:\n");
+        b.append("    type: http\n");
+        b.append("    url: ").append(yq(url)).append('\n');
+        b.append("    interval: 86400\n");
+        b.append("    path: ./providers/sub.yaml\n");
+        b.append("    header:\n");
+        b.append("      User-Agent:\n");
+        b.append("        - 'clash-verge/v1.6.2'\n");
+        b.append("    health-check:\n");
+        b.append("      enable: true\n");
+        b.append("      url: https://www.gstatic.com/generate_204\n");
+        b.append("      interval: 300\n");
+        commonTail(b);
+        return b.toString();
+    }
+
+    /** 订阅模式的公共头部（DNS/顶层优化参数） */
+    private static StringBuilder commonHead(boolean lan, String secret) {
         StringBuilder b = new StringBuilder();
         b.append("# TV助手 - 订阅模式 - 自动生成，改这个文件没用，改了会被覆盖\n");
         b.append(head(lan, secret));
@@ -186,19 +256,11 @@ public final class ConfigWriter {
         b.append("    geoip: false\n");
         b.append("    ipcidr:\n");
         b.append("      - 240.0.0.0/4\n");
-        b.append("proxy-providers:\n");
-        b.append("  SUB:\n");
-        b.append("    type: http\n");
-        b.append("    url: ").append(yq(url)).append('\n');
-        b.append("    interval: 86400\n");
-        b.append("    path: ./providers/sub.yaml\n");
-        b.append("    header:\n");
-        b.append("      User-Agent:\n");
-        b.append("        - 'clash-verge/v1.6.2'\n");
-        b.append("    health-check:\n");
-        b.append("      enable: true\n");
-        b.append("      url: https://www.gstatic.com/generate_204\n");
-        b.append("      interval: 300\n");
+        return b;
+    }
+
+    /** 订阅模式的公共尾部（策略组 + 规则） */
+    private static void commonTail(StringBuilder b) {
         b.append("proxy-groups:\n");
         b.append("  - name: PROXY\n");
         b.append("    type: select\n");
@@ -210,7 +272,6 @@ public final class ConfigWriter {
         b.append("  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve\n");
         b.append("  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\n");
         b.append("  - MATCH,PROXY\n");
-        return b.toString();
     }
 
     /**

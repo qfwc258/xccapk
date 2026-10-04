@@ -168,26 +168,49 @@ public class CoreService extends Service implements WebServer.Control {
         if (!ConfigWriter.isUrl(sub) && !ConfigWriter.looksLikeYaml(sub)) {
             return;
         }
-        String yaml = ConfigWriter.build(sub, lan, secret);
-        String err = ConfigWriter.write(this, yaml);
-        if (err != null) {
-            log("配置写入失败: " + err);
-            return;
-        }
-        Prefs.get(this).edit()
-                .putString(Prefs.K_SUB, sub)
-                .putString(Prefs.K_SECRET, secret)
-                .putBoolean(Prefs.K_LAN, lan)
-                .apply();
-        startProxy();
+        final String fSub = sub;
+        final String fSecret = secret;
+        final boolean fLan = lan;
+        // buildSmart 含网络请求，放后台线程
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String[] r = ConfigWriter.buildSmart(CoreService.this, fSub, fLan, fSecret);
+                String err = ConfigWriter.write(CoreService.this, r[0]);
+                if (err != null) {
+                    log("配置写入失败: " + err);
+                    return;
+                }
+                log(r[1]);
+                Prefs.get(CoreService.this).edit()
+                        .putString(Prefs.K_SUB, fSub)
+                        .putString(Prefs.K_SECRET, fSecret)
+                        .putBoolean(Prefs.K_LAN, fLan)
+                        .apply();
+                startProxy();
+            }
+        }, "apply-proxy").start();
     }
 
     @Override
     public void startProxy() {
-        if (proc != null) {
-            stopProxy();
-        }
-        startCore();
+        final Process old = proc;
+        // 整个启停串行放后台线程：避免主线程网络 I/O，且给旧进程留出释放端口的时间
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (START_LOCK) {
+                    if (old != null) {
+                        stopCore();
+                        try {
+                            Thread.sleep(1200);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    startCoreSync();
+                }
+            }
+        }, "core-starter").start();
     }
 
     @Override
@@ -202,12 +225,28 @@ public class CoreService extends Service implements WebServer.Control {
 
     // ---------------------------------------------------------------- 内核
 
-    private void startCore() {
+    private static final Object START_LOCK = new Object();
+
+    /**
+     * 启动内核（在 core-starter 线程调用）。
+     * 每次启动前按当前偏好重新生成配置——订阅模式下即完成一次订阅刷新
+     * （App 抓取→清洗非法指纹→落盘本地 provider，详见 ConfigWriter.buildSmart）。
+     */
+    private void startCoreSync() {
         if (proc != null) {
             return;
         }
         ConfigWriter.ensureUi(this);
+        SharedPreferences sp = Prefs.get(this);
+        String sub = sp.getString(Prefs.K_SUB, "");
         File cfg = ConfigWriter.configFile(this);
+        if (sub.length() > 0) {
+            String[] r = ConfigWriter.buildSmart(this, sub,
+                    sp.getBoolean(Prefs.K_LAN, true),
+                    sp.getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET));
+            String err = ConfigWriter.write(this, r[0]);
+            log(r[1] + (err != null ? "（写入失败: " + err + "）" : ""));
+        }
         if (!cfg.exists() || cfg.length() == 0) {
             lastError = "还没有配置：先在网页端「代理」页填订阅并保存";
             log(lastError);

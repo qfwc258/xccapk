@@ -205,6 +205,10 @@ public class WebServer {
                 sendJson(s, apiSubsDel(body));
             } else if (path.startsWith("/api/subs/use")) {
                 sendJson(s, apiSubsUse(body));
+            } else if (path.startsWith("/api/subs/refresh")) {
+                sendJson(s, apiSubsRefresh());
+            } else if (path.startsWith("/api/proxytest")) {
+                sendJson(s, apiProxyTest());
             } else if (path.startsWith("/api/pass/set")) {
                 sendJson(s, apiPassSet(body));
             } else if (path.startsWith("/api/pass/off")) {
@@ -427,14 +431,51 @@ public class WebServer {
         }
         String secret = sp.getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
         boolean lan = sp.getBoolean(Prefs.K_LAN, true);
-        String yaml = ConfigWriter.build(url, lan, secret);
-        String err = ConfigWriter.write(ctx, yaml);
+        String[] r = ConfigWriter.buildSmart(ctx, url, lan, secret);
+        String err = ConfigWriter.write(ctx, r[0]);
         if (err != null) {
             return json(false, "配置写入失败: " + err);
         }
         sp.edit().putString(Prefs.K_SUB, url).putString(Prefs.K_SUB_CUR, url).apply();
         hub.startProxy();
-        return json(true, "已切换订阅并重启内核");
+        return json(true, "已切换订阅并重启内核：" + r[1]);
+    }
+
+    /** 强制刷新订阅：重启内核即触发 App 重新抓取并清洗订阅 */
+    private String apiSubsRefresh() {
+        SharedPreferences sp = Prefs.get(ctx);
+        String cur = sp.getString(Prefs.K_SUB, "");
+        if (!ConfigWriter.isUrl(ConfigWriter.normalize(cur))) {
+            return json(false, "当前不是订阅模式（自定义 YAML 无需刷新）");
+        }
+        hub.startProxy();
+        return json(true, "正在重新下载订阅并重启内核…请稍后看概览页内核日志");
+    }
+
+    /** 连通性测试：经本机 7890 代理访问 gstatic generate_204 */
+    private String apiProxyTest() {
+        if (!hub.isProxyRunning()) {
+            return "{\"ok\":false,\"msg\":\"代理未启动，请先在「代理」页点启动\"}";
+        }
+        long t0 = System.currentTimeMillis();
+        try {
+            java.net.Proxy p = new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                    new java.net.InetSocketAddress("127.0.0.1", ConfigWriter.MIXED_PORT));
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                    new java.net.URL("https://www.gstatic.com/generate_204").openConnection(p);
+            c.setConnectTimeout(6000);
+            c.setReadTimeout(6000);
+            int code = c.getResponseCode();
+            long ms = System.currentTimeMillis() - t0;
+            if (code == 204 || code == 200) {
+                return "{\"ok\":true,\"msg\":\"✓ 代理连通（" + ms + "ms，HTTP " + code + "）\"}";
+            }
+            return "{\"ok\":false,\"msg\":\"代理可达但应答异常 HTTP " + code + "（" + ms + "ms）\"}";
+        } catch (Exception e) {
+            long ms = System.currentTimeMillis() - t0;
+            return "{\"ok\":false,\"msg\":\"✗ 测试失败（" + ms + "ms）："
+                    + String.valueOf(e.getMessage()).replace("\"", "'") + "」}";
+        }
     }
 
     // ---------------------------------------------------------- 其它 API

@@ -2,12 +2,13 @@
 <html lang=zh>
 <head>
 <meta charset=utf-8>
-<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no">
+<meta name=theme-color content="#0e1116">
 <title>TV助手 控制端</title>
 <style>
 :root{--bg:#0e1116;--box:#161b22;--bd:#2a3441;--fg:#e6edf3;--mut:#8b98a5;--grn:#2ea043;--blu:#1f6feb;--red:#b62324;--cy:#58a6ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--fg);font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 24px}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0 auto;max-width:760px;padding:0 0 24px}
 header{padding:14px 16px 8px}
 header h1{font-size:19px;margin:0}
 header .mut{color:var(--mut);font-size:12px;margin-top:2px}
@@ -33,6 +34,16 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
 #srclog,#corelog{white-space:pre-wrap;font-family:monospace;font-size:12px;color:#9fb0c0;max-height:240px;overflow:auto;background:#0b0f14;padding:10px;border-radius:6px}
 .bar{height:8px;background:#1c2330;border-radius:4px;overflow:hidden;margin-top:8px}
 .bar>i{display:block;height:100%;background:var(--blu);width:0}
+/* 小屏（手机）适配：按钮全宽、标签页紧凑、订阅行换行 */
+@media (max-width:560px){
+  header h1{font-size:17px}
+  .tab{font-size:12px;padding:8px 2px}
+  button{width:100%;margin:6px 0 0}
+  .sub{flex-wrap:wrap}
+  .sub .n{width:100%}
+  .sub button.sm{margin-top:6px}
+  textarea,input[type=text],input[type=password]{font-size:16px}
+}
 .sub{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-bottom:1px solid var(--bd);font-size:14px}
 .sub:last-child{border-bottom:0}
 .sub .n{flex:1;word-break:break-all}
@@ -53,6 +64,13 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
 <!-- 概览 -->
 <div class="page on" id=ov-page>
   <div class=box id=ov>加载中…</div>
+  <div class=box>
+    <div class=mut>代理连通性测试（经本机 :7890 访问 gstatic 204，验证代理是否真正可用）</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+      <button class=b-blu onclick=proxyTest() style="width:auto;margin:0">测试</button>
+      <span id=pt_msg class=mut>未测试</span>
+    </div>
+  </div>
   <div class=box>
     <div class=mut>内核日志（最近）</div>
     <div id=corelog style="margin-top:8px"></div>
@@ -82,6 +100,7 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
       <button class=b-grn onclick=proxySave()>保存并应用</button>
       <button class=b-blu onclick=proxyStart()>启动</button>
       <button class=b-red onclick=proxyStop()>停止</button>
+      <button class=b-ghost onclick=subRefresh()>更新订阅并重启</button>
     </div>
     <div id=pr_msg class=mut style="margin-top:8px"></div>
   </div>
@@ -200,6 +219,11 @@ function proxySave(){
 }
 function proxyStart(){ post('/api/proxy/start','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
 function proxyStop(){ post('/api/proxy/stop','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
+function subRefresh(){ $('pr_msg').textContent='正在更新订阅…'; post('/api/subs/refresh','').then(j=>{ $('pr_msg').textContent=j.msg; setTimeout(loadInfo,3000); }); }
+function proxyTest(){
+  $('pt_msg').textContent='测试中…（最长约 12 秒）';
+  get('/api/proxytest').then(j=>{ $('pt_msg').textContent=j.msg; $('pt_msg').style.color=j.ok?'var(--grn)':'var(--red)'; });
+}
 function passSet(){
   post('/api/pass/set','pw='+encodeURIComponent($('pass_pw').value))
     .then(j=>{ $('pass_msg').textContent=j.msg; if(j.ok){$('pass_pw').value='';} });
