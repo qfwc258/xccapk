@@ -466,18 +466,31 @@ public class WebServer {
         int conns = 0, delay = 0;
         String node = "";
 
-        // 1) 组当前节点（最准）
-        String g = Net.ctrlGet("/proxies/" + enc("自动选择"), secret, 3000);
-        if (g != null) {
+        // 1) 真实出口链：PROXY(select) 当前选中 → 若是「自动选择」再取组内实际节点
+        String secret2 = secret;
+        String p = Net.ctrlGet("/proxies/" + enc("PROXY"), secret2, 3000);
+        String via = "";
+        if (p != null) {
             try {
-                JSONObject o = new JSONObject(g);
-                node = o.optString("now", "");
-                JSONArray hist = o.optJSONArray("history");
-                if (hist != null && hist.length() > 0) {
-                    delay = hist.getJSONObject(hist.length() - 1).optInt("delay", 0);
-                }
+                via = new JSONObject(p).optString("now", "");
             } catch (Exception ignored) {
             }
+        }
+        if ("自动选择".equals(via)) {
+            String g = Net.ctrlGet("/proxies/" + enc("自动选择"), secret2, 3000);
+            if (g != null) {
+                try {
+                    JSONObject o = new JSONObject(g);
+                    node = o.optString("now", "");
+                    JSONArray hist = o.optJSONArray("history");
+                    if (hist != null && hist.length() > 0) {
+                        delay = hist.getJSONObject(hist.length() - 1).optInt("delay", 0);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        } else {
+            node = via;
         }
 
         // 2) 连接数与累计流量
@@ -565,6 +578,8 @@ public class WebServer {
         }
         CoreService.lastRetestInfo = "可用 " + okCnt + " 个，最快「" + node + "」"
                 + (best < Integer.MAX_VALUE ? " " + best + "ms" : "");
+        // 与 CoreService 重测同一套自愈：确保 PROXY 组选「自动选择」而非钉死的坏节点
+        CoreService.ensureAutoSelect(secret);
         return json(true, "重测完成：" + okCnt + " 个节点可用，最快「" + node + "」"
                 + (best < Integer.MAX_VALUE ? " " + best + "ms" : "") + "，已自动切换");
     }

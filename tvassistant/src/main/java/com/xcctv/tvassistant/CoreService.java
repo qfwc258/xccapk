@@ -385,6 +385,13 @@ public class CoreService extends Service implements WebServer.Control {
                 String ver = ctrlVersion(secret);
                 if (ver != null) {
                     log("✓ 内核就绪，控制接口应答 " + ver);
+                    // cache.db 的 store-selected 可能把 PROXY 恢复到旧坏节点 —— 启动即自愈
+                    String fixed = ensureAutoSelect(secret);
+                    if (fixed != null && "自动选择".equals(fixed)) {
+                        String node = currentGroupNode(secret);
+                        log("出口：自动选择 → "
+                                + (node == null || node.isEmpty() ? "（测速中）" : node));
+                    }
                 } else {
                     log("内核进程存活，但 " + ConfigWriter.CTRL_PORT + " 端口尚未应答（可能在拉取订阅）");
                 }
@@ -490,7 +497,39 @@ public class CoreService extends Service implements WebServer.Control {
         log("✓ 重测完成：" + lastRetestInfo + "，自动选择 → "
                 + (cur == null || cur.isEmpty() ? "未知" : cur));
         dialErrStreak = 0;
+        // 关键自愈：store-selected 可能把 PROXY 组钉死在旧的具体节点(坏节点)上，
+        // 导致重测「自动选择」根本不影响真实出口 —— 这里强制切回。
+        ensureAutoSelect(secret);
         refreshNotification();
+    }
+
+    /**
+     * 确保 PROXY(select) 组当前选中「自动选择」。
+     * 若用户此前固定过某个具体节点（或历史 cache 恢复了坏节点），自动切回自动选择。
+     * 供本服务与 WebServer(/api/regroup) 调用。
+     */
+    public static String ensureAutoSelect(String secret) {
+        String p = Net.ctrlGet("/proxies/" + enc("PROXY"), secret, 3000);
+        if (p == null) {
+            return null;
+        }
+        String now;
+        try {
+            now = new JSONObject(p).optString("now", "");
+        } catch (Exception e) {
+            return null;
+        }
+        if ("自动选择".equals(now)) {
+            return now;
+        }
+        int code = Net.ctrlPut("/proxies/" + enc("PROXY"),
+                "{\"name\":\"自动选择\"}", secret, 5000);
+        if (code == 200 || code == 204) {
+            CoreService.log("检测到出口固定在「" + now + "」（可能为坏节点），已自动切回「自动选择」");
+            return "自动选择";
+        }
+        CoreService.log("切回「自动选择」失败 HTTP " + code);
+        return now;
     }
 
     /** 读「自动选择」组当前实际选中的节点 */

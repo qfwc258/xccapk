@@ -99,4 +99,39 @@ public final class Net {
             }
         }
     }
+
+    /** 调内核 external-controller 的 PUT 接口（如切换策略组选中项），返回 HTTP 状态码或 -1 */
+    public static int ctrlPut(String path, String jsonBody, String secret, int readTimeoutMs) {
+        Socket s = new Socket();
+        try {
+            s.connect(new InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
+            s.setSoTimeout(readTimeoutMs);
+            java.io.OutputStream os = s.getOutputStream();
+            byte[] b = jsonBody == null ? new byte[0] : jsonBody.getBytes("UTF-8");
+            String req = "PUT " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
+                    + "Content-Type: application/json\r\n"
+                    + "Content-Length: " + b.length + "\r\n"
+                    + "Connection: close\r\n\r\n";
+            os.write(req.getBytes("UTF-8"));
+            os.write(b);
+            os.flush();
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(s.getInputStream(), "UTF-8"));
+            String status = r.readLine();
+            if (status == null) {
+                return -1;
+            }
+            // "HTTP/1.1 204 No Content" → 204
+            String[] parts = status.split(" ");
+            return parts.length > 1 ? Integer.parseInt(parts[1].trim()) : -1;
+        } catch (Exception e) {
+            return -1;
+        } finally {
+            try {
+                s.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
 }
