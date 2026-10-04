@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang=zh>
+<head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TV助手 控制端</title>
+<style>
+:root{--bg:#0e1116;--box:#161b22;--bd:#2a3441;--fg:#e6edf3;--mut:#8b98a5;--grn:#2ea043;--blu:#1f6feb;--red:#b62324;--cy:#58a6ff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:0 0 24px}
+header{padding:14px 16px 8px}
+header h1{font-size:19px;margin:0}
+header .mut{color:var(--mut);font-size:12px;margin-top:2px}
+.tabs{display:flex;gap:6px;padding:0 12px;position:sticky;top:0;background:var(--bg);z-index:5;padding-top:8px}
+.tab{flex:1;text-align:center;padding:9px 4px;font-size:13px;color:var(--mut);background:var(--box);border:1px solid var(--bd);border-radius:8px}
+.tab.on{color:#fff;background:var(--blu);border-color:var(--blu)}
+.page{display:none;padding:12px}
+.page.on{display:block}
+.box{background:var(--box);border:1px solid var(--bd);border-radius:10px;padding:14px;margin:10px 0}
+label{display:block;font-size:13px;color:#9fb0c0;margin:10px 0 4px}
+textarea,input[type=text]{width:100%;background:#1c2330;color:#fff;border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:14px;font-family:inherit}
+button{color:#fff;border:0;border-radius:6px;padding:11px 16px;font-size:15px;cursor:pointer;margin:6px 6px 0 0}
+.b-grn{background:var(--grn)}.b-blu{background:var(--blu)}.b-red{background:var(--red)}.b-ghost{background:#30363d}
+code{color:#7ee787;font-size:13px;word-break:break-all}
+a{color:var(--cy)}
+iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-top:8px}
+.mut{color:var(--mut);font-size:12px}
+#ov{font-size:14px;line-height:1.7}
+#ov b{color:#fff}
+#srclog{white-space:pre-wrap;font-family:monospace;font-size:12px;color:#9fb0c0;max-height:240px;overflow:auto;background:#0b0f14;padding:10px;border-radius:6px}
+.bar{height:8px;background:#1c2330;border-radius:4px;overflow:hidden;margin-top:8px}
+.bar>i{display:block;height:100%;background:var(--blu);width:0}
+</style>
+</head>
+<body>
+<header><h1>TV助手 · 控制端</h1><div class=mut>服务端运行于本机，手机同局域网即可控制</div></header>
+
+<div class=tabs>
+  <div class="tab on" data-p=ov>概览</div>
+  <div class="tab" data-p=pr>代理</div>
+  <div class="tab" data-p=src>源下载</div>
+  <div class="tab" data-p=dash>仪表盘</div>
+</div>
+
+<!-- 概览 -->
+<div class="page on" id=ov-page>
+  <div class=box id=ov>加载中…</div>
+</div>
+
+<!-- 代理 -->
+<div class=page id=pr-page>
+  <div class=box>
+    <label>订阅源（http(s) 地址，或整段 config.yaml）</label>
+    <textarea id=pr_sub rows=5></textarea>
+    <label>控制面板密钥（默认 zakamihomo）</label>
+    <input id=pr_secret type=text>
+    <label><input id=pr_lan type=checkbox style="width:auto;vertical-align:middle;margin-right:6px">允许局域网代理</label>
+    <div style="margin-top:10px">
+      <button class=b-grn onclick=proxySave()>保存并应用</button>
+      <button class=b-blu onclick=proxyStart()>启动</button>
+      <button class=b-red onclick=proxyStop()>停止</button>
+    </div>
+    <div id=pr_msg class=mut style="margin-top:8px"></div>
+  </div>
+  <div class=box>
+    <span class=mut>API：</span><code id=pr_api></code><br>
+    <a id=pr_ui href="#" target=_blank>在新标签打开仪表盘 ↗</a>
+  </div>
+</div>
+
+<!-- 源下载 -->
+<div class=page id=src-page>
+  <div class=box>
+    <label>xcctv 源地址（vod.json）</label>
+    <input id=src_url type=text>
+    <div style="margin-top:10px">
+      <button class=b-grn onclick=srcSave()>保存地址</button>
+      <button class=b-blu onclick=srcStart()>立即下载</button>
+    </div>
+    <div id=src_msg class=mut style="margin-top:8px"></div>
+  </div>
+  <div class=box>
+    <div id=src_state class=mut>状态：空闲</div>
+    <div class=bar><i id=src_bar></i></div>
+    <div id=srclog style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- 仪表盘 -->
+<div class=page id=dash-page>
+  <div class=box>
+    <div class=mut>YACD 代理可视化（从内核 :9090/ui 加载）</div>
+    <iframe id=dash_frame src="about:blank"></iframe>
+  </div>
+</div>
+
+<script>
+function post(u,d){return fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d}).then(r=>r.json())}
+function get(u){return fetch(u).then(r=>r.json())}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function $(id){return document.getElementById(id)}
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on'); $(''+t.dataset.p+'-page').classList.add('on');
+  if(t.dataset.p==='dash') loadDash();
+});
+
+function loadInfo(){
+  get('/api/info').then(j=>{
+    $('ov').innerHTML =
+      '<b>设备：</b>'+esc(j.ip)+'<br>'+
+      '<b>网页控制：</b><code>http://'+esc(j.ip)+':'+j.panel+'/</code><br>'+
+      '<b>代理内核：</b>'+(j.proxyRunning?'运行中':'已停止')+(j.lan?'（允许局域网）':'')+'<br>'+
+      '<b>源下载：</b>'+esc(srcStateText(j.src))+'<br>'+
+      '<b>密钥：</b><code>'+esc(j.secret)+'</code>';
+    $('pr_sub').value = '';  // 不在概览暴露明文订阅，避免覆盖
+    $('pr_secret').value = j.secret||'zakamihomo';
+    $('pr_lan').checked = !!j.lan;
+    $('pr_api').textContent = j.proxyApi||'';
+    $('pr_ui').href = j.proxyUi||'#';
+    $('src_url').value = j.srcUrl||'';
+    renderSrc(j.src);
+  }).catch(e=>{ $('ov').textContent='加载失败：'+e; });
+}
+
+function srcStateText(s){
+  if(!s) return '空闲';
+  if(s.status==='downloading') return '下载中 '+s.current+'/'+s.total;
+  if(s.status==='done') return '已完成 → '+s.dir;
+  if(s.status==='failed') return '失败';
+  return '空闲';
+}
+function renderSrc(s){
+  if(!s) return;
+  $('src_state').textContent = '状态：'+srcStateText(s)+(s.url?'  ('+esc(s.url)+')':'');
+  var p = s.total>0 ? Math.round(s.current/s.total*100) : 0;
+  $('src_bar').style.width = p+'%';
+  $('srclog').textContent = s.log||'';
+  $('srclog').scrollTop = 1e9;
+}
+
+function proxySave(){
+  var d='sub='+encodeURIComponent($('pr_sub').value)
+    +'&secret='+encodeURIComponent($('pr_secret').value)
+    +'&lan='+($('pr_lan').checked?1:0);
+  post('/api/proxy/set',d).then(j=>{ $('pr_msg').textContent=j.msg; setTimeout(loadInfo,1200); });
+}
+function proxyStart(){ post('/api/proxy/start','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
+function proxyStop(){ post('/api/proxy/stop','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
+function srcSave(){
+  post('/api/source/set','url='+encodeURIComponent($('src_url').value))
+    .then(j=>{ $('src_msg').textContent=j.msg; loadInfo(); });
+}
+function srcStart(){ post('/api/source/start','').then(j=>{ $('src_msg').textContent=j.msg; pollSrc(); }); }
+function pollSrc(){
+  get('/api/source/info').then(j=>{ renderSrc(j); if(j.status==='downloading') setTimeout(pollSrc,1000); });
+}
+function loadDash(){
+  get('/api/info').then(j=>{ if(j.proxyUi) $('dash_frame').src=j.proxyUi; });
+}
+
+loadInfo();
+setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='ov') loadInfo(); },5000);
+setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='src') pollSrc(); },2000);
+</script>
+</body>
+</html>

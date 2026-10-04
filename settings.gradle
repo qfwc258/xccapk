@@ -14,5 +14,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "XCCTV_TVHelper"
-include ':app'
-include ':mihomotv'
+// 旧模块 app(xcctvhelper) / mihomotv 保留在仓库磁盘上作历史参考，但移出构建。
+// include ':app'
+// include ':mihomotv'
+include ':tvassistant'

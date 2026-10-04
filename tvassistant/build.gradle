@@ -1,0 +1,92 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace "com.xcctv.tvassistant"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.xcctv.tvassistant"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        ndk {
+            // 真实电视/盒子都是 ARM；x86_64 仅用于模拟器调试（默认不打包）
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+    }
+
+    // 允许 -P ABI_FILTERS=arm64-v8a 或 armeabi-v7a 拆分架构包
+    if (project.hasProperty('ABI_FILTERS')) {
+        android.defaultConfig.ndk.abiFilters = project.property('ABI_FILTERS').toString().split('\\|') as List
+    }
+
+    // ---------- 签名：复用仓库 signing/ 下的默认密钥，也支持 -P / 环境变量覆盖 ----------
+    def gProp = { key, fallback ->
+        def v = project.findProperty(key) ?: fallback
+        return v instanceof String ? v.trim() : v
+    }
+    signingConfigs {
+        release {
+            storeFile     rootProject.file(gProp('RELEASE_STORE_FILE', 'signing/release.keystore'))
+            storePassword gProp('RELEASE_STORE_PASSWORD', 'xcctv2026')
+            keyAlias      gProp('RELEASE_KEY_ALIAS', 'xcctv')
+            keyPassword   gProp('RELEASE_KEY_PASSWORD', 'xcctv2026')
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    // 内核以 libmihomo.so 形式进 jniLibs，CoreService 要从 nativeLibraryDir 直接 exec，
+    // 因此必须允许系统把 .so 解压到磁盘（targetSdk 34 默认不解压）。
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    // 输出 APK 按 "TV助手-v版本-ABI-类型.apk" 重命名（ABI 来自 -P ABI_FILTERS）
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            if (output.outputFileName) {
+                def abi = project.hasProperty('ABI_FILTERS')
+                        ? project.property('ABI_FILTERS').toString().replace('|', '_')
+                        : 'all'
+                output.outputFileName = "TV助手-${variant.versionName}-${abi}-${variant.buildType.name}.apk"
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+
+    // OkHttp + Gson：源下载网络请求与 JSON 解析
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    // 协程：源下载并行任务
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+}
