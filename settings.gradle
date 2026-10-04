@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "XCCTV_TVHelper"
 include ':app'
+include ':mihomotv'

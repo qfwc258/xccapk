@@ -43,6 +43,9 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Mihomo 内核二进制（体积大，用 mihomotv/fetch_core.sh 拉取，不进 git）
+mihomotv/src/main/jniLibs/
+
 # Signing —— 签名密钥不要推 GitHub（ZIP 可内置，git 要忽略）
 # 但打包 ZIP 时要保留，故只忽略根目录的和 *.jks
 *.jks
