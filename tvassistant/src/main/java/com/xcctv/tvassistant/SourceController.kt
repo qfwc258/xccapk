@@ -43,6 +43,12 @@ object SourceController : DownloadProgressListener {
         }
     }
 
+    /** 缺存储权限时的友好提示（网页端/电视端都会显示） */
+    fun permFail() {
+        status = "failed"
+        addLog("❌ 缺少「所有文件访问」权限：请在电视上打开 TV助手 按提示授权，或到 系统设置→应用→TV助手→权限 里开启")
+    }
+
     override fun onProgress(current: Int, total: Int, file: String) {
         this.current = current
         this.total = total

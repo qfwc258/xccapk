@@ -17,6 +17,10 @@ public final class Prefs {
     public static final String K_SRC_URL = "src_url";    // xcctv 源地址
     public static final String K_BOOT_SRC = "boot_src";  // 开机自启源下载
 
+    public static final String K_PASS = "panel_pass";    // 网页控制端访问密码（空=免密）
+    public static final String K_SUBS = "subs_json";     // 订阅列表 [{"n":名称,"u":地址}]
+    public static final String K_SUB_CUR = "sub_cur";    // 当前使用的订阅地址
+
     private Prefs() {
     }
 

@@ -18,8 +18,9 @@ header .mut{color:var(--mut);font-size:12px;margin-top:2px}
 .page.on{display:block}
 .box{background:var(--box);border:1px solid var(--bd);border-radius:10px;padding:14px;margin:10px 0}
 label{display:block;font-size:13px;color:#9fb0c0;margin:10px 0 4px}
-textarea,input[type=text]{width:100%;background:#1c2330;color:#fff;border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:14px;font-family:inherit}
+textarea,input[type=text],input[type=password]{width:100%;background:#1c2330;color:#fff;border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:14px;font-family:inherit}
 button{color:#fff;border:0;border-radius:6px;padding:11px 16px;font-size:15px;cursor:pointer;margin:6px 6px 0 0}
+button.sm{padding:6px 12px;font-size:13px;margin:0 0 0 8px}
 .b-grn{background:var(--grn)}.b-blu{background:var(--blu)}.b-red{background:var(--red)}.b-ghost{background:#30363d}
 code{color:#7ee787;font-size:13px;word-break:break-all}
 a{color:var(--cy)}
@@ -27,13 +28,20 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
 .mut{color:var(--mut);font-size:12px}
 #ov{font-size:14px;line-height:1.7}
 #ov b{color:#fff}
-#srclog{white-space:pre-wrap;font-family:monospace;font-size:12px;color:#9fb0c0;max-height:240px;overflow:auto;background:#0b0f14;padding:10px;border-radius:6px}
+.warn{color:#e3b341;font-size:13px;margin-top:6px}
+.err{color:#f85149;font-size:13px;margin-top:6px;white-space:pre-wrap;word-break:break-all}
+#srclog,#corelog{white-space:pre-wrap;font-family:monospace;font-size:12px;color:#9fb0c0;max-height:240px;overflow:auto;background:#0b0f14;padding:10px;border-radius:6px}
 .bar{height:8px;background:#1c2330;border-radius:4px;overflow:hidden;margin-top:8px}
 .bar>i{display:block;height:100%;background:var(--blu);width:0}
+.sub{display:flex;align-items:center;justify-content:space-between;padding:9px 4px;border-bottom:1px solid var(--bd);font-size:14px}
+.sub:last-child{border-bottom:0}
+.sub .n{flex:1;word-break:break-all}
+.sub .n small{display:block;color:var(--mut);font-size:11px;word-break:break-all}
+.sub.on .n b{color:var(--grn)}
 </style>
 </head>
 <body>
-<header><h1>TV助手 · 控制端</h1><div class=mut>服务端运行于本机，手机同局域网即可控制</div></header>
+<header><h1>TV助手 · 控制端</h1><div class=mut>服务端运行于本机，手机同局域网即可控制 <a href=/api/logout onclick="return logout()">登出</a></div></header>
 
 <div class=tabs>
   <div class="tab on" data-p=ov>概览</div>
@@ -45,13 +53,28 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
 <!-- 概览 -->
 <div class="page on" id=ov-page>
   <div class=box id=ov>加载中…</div>
+  <div class=box>
+    <div class=mut>内核日志（最近）</div>
+    <div id=corelog style="margin-top:8px"></div>
+  </div>
 </div>
 
 <!-- 代理 -->
 <div class=page id=pr-page>
   <div class=box>
-    <label>订阅源（http(s) 地址，或整段 config.yaml）</label>
-    <textarea id=pr_sub rows=5></textarea>
+    <div class=mut style="margin-bottom:2px">订阅列表（点「使用」一键切换）</div>
+    <div id=subs>加载中…</div>
+    <label>添加订阅：名称（可选）</label>
+    <input id=sub_n type=text placeholder="如 机场A">
+    <label>订阅地址（http(s)）</label>
+    <input id=sub_u type=text placeholder="https://...">
+    <button class=b-blu onclick=subAdd()>添加到列表</button>
+    <div id=sub_msg class=mut style="margin-top:6px"></div>
+  </div>
+  <div class=box>
+    <label>临时应用：订阅地址或整段 config.yaml</label>
+    <textarea id=pr_sub rows=4 placeholder="留空则不动当前配置"></textarea>
+    <label><input id=pr_save type=checkbox style="width:auto;vertical-align:middle;margin-right:6px">应用后存入订阅列表</label>
     <label>控制面板密钥（默认 zakamihomo）</label>
     <input id=pr_secret type=text>
     <label><input id=pr_lan type=checkbox style="width:auto;vertical-align:middle;margin-right:6px">允许局域网代理</label>
@@ -61,6 +84,14 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
       <button class=b-red onclick=proxyStop()>停止</button>
     </div>
     <div id=pr_msg class=mut style="margin-top:8px"></div>
+  </div>
+  <div class=box>
+    <div class=mut style="margin-bottom:2px">控制端访问密码</div>
+    <label>新密码（设置后其它手机访问需先登录）</label>
+    <input id=pass_pw type=password>
+    <button class=b-grn onclick=passSet()>设置密码</button>
+    <button class=b-ghost onclick=passOff()>关闭密码</button>
+    <div id=pass_msg class=mut style="margin-top:6px"></div>
   </div>
   <div class=box>
     <span class=mut>API：</span><code id=pr_api></code><br>
@@ -105,31 +136,82 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
   t.classList.add('on'); $(''+t.dataset.p+'-page').classList.add('on');
   if(t.dataset.p==='dash') loadDash();
+  if(t.dataset.p==='pr') loadSubs();
 });
+
+function logout(){ post('/api/logout','').then(()=>location.href='/'); return false; }
 
 function loadInfo(){
   get('/api/info').then(j=>{
-    $('ov').innerHTML =
+    var h =
       '<b>设备：</b>'+esc(j.ip)+'<br>'+
       '<b>网页控制：</b><code>http://'+esc(j.ip)+':'+j.panel+'/</code><br>'+
-      '<b>代理内核：</b>'+(j.proxyRunning?'运行中':'已停止')+(j.lan?'（允许局域网）':'')+'<br>'+
-      '<b>源下载：</b>'+esc(srcStateText(j.src))+'<br>'+
-      '<b>密钥：</b><code>'+esc(j.secret)+'</code>';
-    $('pr_sub').value = '';  // 不在概览暴露明文订阅，避免覆盖
-    $('pr_secret').value = j.secret||'zakamihomo';
-    $('pr_lan').checked = !!j.lan;
-    $('pr_api').textContent = j.proxyApi||'';
-    $('pr_ui').href = j.proxyUi||'#';
-    $('src_url').value = j.srcUrl||'';
+      '<b>代理内核：</b>'+(j.proxyRunning?'运行中':'已停止')+(j.lan?'（允许局域网）':'')+'<br>';
+    if(j.coreErr) h+='<div class=err>✗ '+esc(j.coreErr)+'</div>';
+    h+='<b>源下载：</b>'+esc(srcStateText(j.src))+'<br>'+
+      '<b>密钥：</b><code>'+esc(j.secret)+'</code><br>'+
+      '<b>访问密码：</b>'+(j.hasPass?'已开启':'未设置')+'　<b>当前订阅：</b>'+(j.subCur?esc(j.subCur):'未配置');
+    if(!j.storage) h+='<div class=warn>⚠ 存储权限未授予：请在电视上打开 TV助手 按提示授权（源下载需要）</div>';
+    $('ov').innerHTML=h;
+    $('corelog').textContent=j.coreLog||'（空）';
+    $('pr_secret').value=j.secret||'zakamihomo';
+    $('pr_lan').checked=!!j.lan;
+    $('pr_api').textContent=j.proxyApi||'';
+    $('pr_ui').href=j.proxyUi||'#';
+    $('src_url').value=j.srcUrl||'';
     renderSrc(j.src);
   }).catch(e=>{ $('ov').textContent='加载失败：'+e; });
 }
 
+/* ---------------- 订阅列表 ---------------- */
+function loadSubs(){
+  get('/api/subs/list').then(j=>{
+    var a=j.subs||[], h='';
+    if(!a.length) h='<div class=mut>列表为空：先在下方添加订阅地址</div>';
+    a.forEach(s=>{
+      var on = s.u===j.cur;
+      h+='<div class="sub'+(on?' on':'')+'"><span class=n><b>'+(on?'● ':'○ ')+esc(s.n)+'</b>'
+        +'<small>'+esc(s.u)+'</small></span>'
+        +(on?'':'<button class="sm b-grn" onclick=subUse(\''+esc(s.u)+'\')>使用</button>')
+        +'<button class="sm b-red" onclick=subDel(\''+esc(s.u)+'\')>删除</button></div>';
+    });
+    $('subs').innerHTML=h;
+  });
+}
+function subAdd(){
+  post('/api/subs/add','n='+encodeURIComponent($('sub_n').value)+'&u='+encodeURIComponent($('sub_u').value))
+    .then(j=>{ $('sub_msg').textContent=j.msg; if(j.ok){$('sub_n').value='';$('sub_u').value='';loadSubs();} });
+}
+function subUse(u){
+  post('/api/subs/use','u='+encodeURIComponent(u))
+    .then(j=>{ $('sub_msg').textContent=j.msg; loadSubs(); setTimeout(loadInfo,1500); });
+}
+function subDel(u){
+  post('/api/subs/del','u='+encodeURIComponent(u)).then(j=>{ $('sub_msg').textContent=j.msg; loadSubs(); });
+}
+
+/* ---------------- 代理 ---------------- */
+function proxySave(){
+  var d='sub='+encodeURIComponent($('pr_sub').value)
+    +'&secret='+encodeURIComponent($('pr_secret').value)
+    +'&lan='+($('pr_lan').checked?1:0)
+    +'&save='+($('pr_save').checked?1:0);
+  post('/api/proxy/set',d).then(j=>{ $('pr_msg').textContent=j.msg; setTimeout(loadInfo,1200); });
+}
+function proxyStart(){ post('/api/proxy/start','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
+function proxyStop(){ post('/api/proxy/stop','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
+function passSet(){
+  post('/api/pass/set','pw='+encodeURIComponent($('pass_pw').value))
+    .then(j=>{ $('pass_msg').textContent=j.msg; if(j.ok){$('pass_pw').value='';} });
+}
+function passOff(){ post('/api/pass/off','').then(j=>{ $('pass_msg').textContent=j.msg; }); }
+
+/* ---------------- 源下载 ---------------- */
 function srcStateText(s){
   if(!s) return '空闲';
   if(s.status==='downloading') return '下载中 '+s.current+'/'+s.total;
   if(s.status==='done') return '已完成 → '+s.dir;
-  if(s.status==='failed') return '失败';
+  if(s.status==='failed') return '失败（见日志）';
   return '空闲';
 }
 function renderSrc(s){
@@ -140,15 +222,6 @@ function renderSrc(s){
   $('srclog').textContent = s.log||'';
   $('srclog').scrollTop = 1e9;
 }
-
-function proxySave(){
-  var d='sub='+encodeURIComponent($('pr_sub').value)
-    +'&secret='+encodeURIComponent($('pr_secret').value)
-    +'&lan='+($('pr_lan').checked?1:0);
-  post('/api/proxy/set',d).then(j=>{ $('pr_msg').textContent=j.msg; setTimeout(loadInfo,1200); });
-}
-function proxyStart(){ post('/api/proxy/start','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
-function proxyStop(){ post('/api/proxy/stop','').then(j=>{ $('pr_msg').textContent=j.msg; loadInfo(); }); }
 function srcSave(){
   post('/api/source/set','url='+encodeURIComponent($('src_url').value))
     .then(j=>{ $('src_msg').textContent=j.msg; loadInfo(); });
@@ -162,6 +235,7 @@ function loadDash(){
 }
 
 loadInfo();
+loadSubs();
 setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='ov') loadInfo(); },5000);
 setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='src') pollSrc(); },2000);
 </script>

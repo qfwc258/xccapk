@@ -3,17 +3,22 @@ package com.xcctv.tvassistant;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
+import android.provider.Settings;
 import android.widget.TextView;
 
 /**
- * 设备端极简界面：只负责把「手机网页控制地址」亮出来，并显示两端状态。
+ * 设备端极简界面：把「手机网页控制地址」亮出来，并显示两端状态。
  * 所有设置与控制都在手机浏览器完成（打开 http://本机IP:9091/）。
- * 打开即启动 CoreService（服务端），使其常驻。
+ * 打开即启动 CoreService（服务端），使其常驻；并主动申请存储权限（源下载需要）。
  */
 public class MainActivity extends Activity {
+
+    private static final int REQ_STORAGE = 10;
 
     private TextView tvInfo;
     private final Handler handler = new Handler();
@@ -31,6 +36,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         tvInfo = findViewById(R.id.tv_info);
         askNotification();
+        askStorage();
         // 打开即启动服务端
         startService(new Intent(this, CoreService.class));
     }
@@ -63,9 +69,51 @@ public class MainActivity extends Activity {
         if (proxy) {
             b.append("  本机  ").append(ip).append(':').append(ConfigWriter.MIXED_PORT).append('\n');
         }
+        if (!proxy && CoreService.lastError().length() > 0) {
+            b.append("  ✗ ").append(CoreService.lastError()).append('\n');
+        }
         b.append("源下载：").append(src).append('\n');
+        if (!storageGranted()) {
+            b.append("⚠ 存储权限未授予，源下载不可用（本界面已自动弹授权）\n");
+        }
         b.append("\n内核 ").append(CoreService.CORE_VERSION);
         tvInfo.setText(b.toString());
+    }
+
+    // -------------------------------------------------------- 权限
+
+    private boolean storageGranted() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            return Environment.isExternalStorageManager();
+        }
+        if (Build.VERSION.SDK_INT >= 23) {
+            return checkSelfPermission("android.permission.WRITE_EXTERNAL_STORAGE")
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    /** 主动申请存储权限：11+ 引导到「所有文件访问」开关页，6~10 直接弹运行时授权 */
+    private void askStorage() {
+        if (storageGranted()) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivity(i);
+            } catch (Exception e) {
+                try {
+                    startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+                } catch (Exception ignored) {
+                }
+            }
+        } else if (Build.VERSION.SDK_INT >= 23) {
+            requestPermissions(new String[]{
+                    "android.permission.READ_EXTERNAL_STORAGE",
+                    "android.permission.WRITE_EXTERNAL_STORAGE"}, REQ_STORAGE);
+        }
     }
 
     private void askNotification() {

@@ -40,8 +40,11 @@ public class CoreService extends Service implements WebServer.Control {
     private static final ArrayDeque<String> LOG = new ArrayDeque<String>();
     private static volatile boolean running = false;
     private static volatile int pid = 0;
+    private static volatile String lastError = "";
+    /** true=正在主动停止（网页/通知触发），false=内核自己退了（视为异常） */
+    private static volatile boolean stopping = false;
 
-    private Process proc;
+    private volatile Process proc;
     private PowerManager.WakeLock wake;
     private Thread reader;
     private Thread waiter;
@@ -53,6 +56,11 @@ public class CoreService extends Service implements WebServer.Control {
 
     public static int getPid() {
         return pid;
+    }
+
+    /** 最近一次内核异常退出的原因（给网页端与设备端 UI 显示） */
+    public static String lastError() {
+        return lastError;
     }
 
     public static void clearLog() {
@@ -201,25 +209,36 @@ public class CoreService extends Service implements WebServer.Control {
         ConfigWriter.ensureUi(this);
         File cfg = ConfigWriter.configFile(this);
         if (!cfg.exists() || cfg.length() == 0) {
-            log("没有配置文件，先在网页端填订阅并保存");
+            lastError = "还没有配置：先在网页端「代理」页填订阅并保存";
+            log(lastError);
             return;
         }
         String bin = getApplicationInfo().nativeLibraryDir + "/libmihomo.so";
         File b = new File(bin);
         if (!b.exists()) {
-            log("内核文件缺失: " + bin);
+            lastError = "内核文件缺失: " + bin;
+            log(lastError);
             return;
         }
         b.setExecutable(true, false);
 
+        // 端口预检：被其它进程（比如旧版 mihomotv 还在跑）占用时，内核会起不来
+        if (Net.portOpen("127.0.0.1", ConfigWriter.MIXED_PORT)) {
+            log("⚠ 端口 " + ConfigWriter.MIXED_PORT + " 已被占用——若装过旧版 mihomotv 请先停用/卸载它");
+        }
+
         File wd = ConfigWriter.workDir(this);
         clearLog();
+        lastError = "";
+        stopping = false;
         log("启动内核 " + CORE_VERSION);
         try {
             List<String> cmd = new ArrayList<String>();
             cmd.add(bin);
             cmd.add("-d");
             cmd.add(wd.getAbsolutePath());
+            cmd.add("-f");
+            cmd.add(cfg.getAbsolutePath());
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.directory(wd);
             pb.redirectErrorStream(true);
@@ -228,7 +247,9 @@ public class CoreService extends Service implements WebServer.Control {
             proc = pb.start();
             running = true;
         } catch (Exception e) {
-            log("启动失败: " + e.getMessage());
+            lastError = "无法启动内核进程: " + e.getMessage()
+                    + "（Android 10+ 禁止从数据目录执行程序时会出现）";
+            log(lastError);
             proc = null;
             running = false;
             return;
@@ -271,17 +292,109 @@ public class CoreService extends Service implements WebServer.Control {
                 }
                 running = false;
                 pid = 0;
-                log("内核已退出 (code=" + code + ")");
+                proc = null;
+                if (stopping) {
+                    log("内核已停止");
+                } else {
+                    String tail = tail(6).replace('\n', ' ').trim();
+                    String hint = diagnose(String.valueOf(code), tail);
+                    lastError = "内核异常退出 code=" + code + (hint.isEmpty() ? "" : "：" + hint);
+                    log("✗ " + lastError);
+                    log("最近输出: " + tail);
+                    refreshNotification();
+                }
             }
         }, "mihomo-wait");
         waiter.setDaemon(true);
         waiter.start();
 
+        // 启动自检：2.5 秒后还活着，再探测 external-controller 是否应答
+        Thread probe = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(2500);
+                } catch (Exception ignored) {
+                }
+                if (!running || p != proc) {
+                    return;
+                }
+                if (!p.isAlive()) {
+                    return;
+                }
+                String secret = Prefs.get(CoreService.this)
+                        .getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
+                String ver = ctrlVersion(secret);
+                if (ver != null) {
+                    log("✓ 内核就绪，控制接口应答 " + ver);
+                } else {
+                    log("内核进程存活，但 " + ConfigWriter.CTRL_PORT + " 端口尚未应答（可能在拉取订阅）");
+                }
+                refreshNotification();
+            }
+        }, "mihomo-probe");
+        probe.setDaemon(true);
+        probe.start();
+
         acquireWake();
         refreshNotification();
     }
 
+    /** 探测 external-controller /version，返回 version 字符串或 null */
+    private String ctrlVersion(String secret) {
+        try {
+            java.net.Socket s = new java.net.Socket();
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
+            java.io.OutputStream os = s.getOutputStream();
+            String req = "GET /version HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
+                    + "Connection: close\r\n\r\n";
+            os.write(req.getBytes("UTF-8"));
+            os.flush();
+            BufferedReader r = new BufferedReader(
+                    new InputStreamReader(s.getInputStream(), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String l;
+            while ((l = r.readLine()) != null && sb.length() < 600) {
+                sb.append(l).append('\n');
+            }
+            s.close();
+            String body = sb.toString();
+            int i = body.indexOf("version");
+            if (i >= 0) {
+                return "v" + body.replaceAll(".*\"version\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 根据退出码与最后输出猜测可读的原因 */
+    private static String diagnose(String code, String tail) {
+        String t = tail.toLowerCase();
+        if (t.contains("address already in use") || t.contains("bind") && t.contains("use")) {
+            return "端口被占用——旧版 mihomotv 或其它代理正在运行，请先停止它";
+        }
+        if (t.contains("permission denied")) {
+            return "系统拒绝执行内核（W^X 限制）";
+        }
+        if (t.contains("no such file") || t.contains("not found")) {
+            return "内核或配置文件路径不存在";
+        }
+        if (t.contains("yaml") || t.contains("parse error") || t.contains("unmarshal")
+                || t.contains("invalid")) {
+            return "配置解析失败——检查订阅/YAML 内容";
+        }
+        if ("1".equals(code) && tail.length() > 0) {
+            return "详见下方最近输出";
+        }
+        return "";
+    }
+
     private void stopCore() {
+        stopping = true;
+        lastError = "";
         Process p = proc;
         proc = null;
         running = false;
