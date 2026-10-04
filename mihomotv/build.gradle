@@ -13,8 +13,14 @@ android {
         versionCode 1
         versionName "1.0"
         ndk {
-            // 真实电视都是 ARM；x86_64 仅用于模拟器调试
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
+            // 真实电视都是 ARM；x86_64 仅用于模拟器调试。
+            // 可用 -P ABI_FILTERS=arm64-v8a 单独构建某 ABI（发布时按架构拆分包）。
+            def abiProp = project.findProperty('ABI_FILTERS')
+            if (abiProp) {
+                abiFilters abiProp.split(',')
+            } else {
+                abiFilters 'arm64-v8a', 'armeabi-v7a'
+            }
         }
     }
 
