@@ -67,6 +67,10 @@ iframe{width:100%;height:70vh;border:0;border-radius:8px;background:#fff;margin-
   <div class=box>
     <div class=mut>实时连接（每 2 秒刷新）</div>
     <div id=live style="margin-top:6px;font-size:14px;line-height:1.8">等待内核启动…</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+      <button class=b-blu onclick=regroup() style="width:auto;margin:0">重测节点</button>
+      <span class=mut>整组测速并自动切换到最快可用节点（约 5 秒）</span>
+    </div>
   </div>
   <div class=box>
     <div class=mut>代理连通性测试（经本机 :7890 访问 gstatic 204，验证代理是否真正可用）</div>
@@ -232,6 +236,10 @@ function proxyTest(){
 /* ---------------- 实时连接 ---------------- */
 var lastUp=0,lastDown=0,lastT=0;
 function fmtSpeed(b){ b=Math.max(0,b||0); return b>=1048576?(b/1048576).toFixed(2)+' MB/s':b>=1024?(b/1024).toFixed(1)+' KB/s':Math.round(b)+' B/s'; }
+function regroup(){
+  $('live').innerHTML='<span class=mut>正在整组测速（约 5 秒，请稍候）…</span>';
+  post('/api/regroup','').then(j=>{ $('live').innerHTML=j.msg; setTimeout(pollLive,1500); });
+}
 function pollLive(){
   get('/api/live').then(j=>{
     var now=Date.now(), rate='';
@@ -241,9 +249,11 @@ function pollLive(){
     }
     lastUp=j.up||0; lastDown=j.down||0; lastT=now;
     if(!j.running){ $('live').innerHTML='<span class=mut>代理未启动</span>'; return; }
-    if(!j.conns){ $('live').innerHTML='<b>出口节点：</b>—（尚无流量）'+rate
+    var dl = j.delay>0 ? ' <span class=mut>('+j.delay+'ms)</span>' : '';
+    if(!j.conns){ $('live').innerHTML='<b>出口节点：</b>'+esc(j.node||'—')+dl+'（尚无流量）'+rate
       +'<div class=mut style="margin-top:4px">代理已就绪。让手机/播放器把 HTTP 代理指向 <code>电视IP:7890</code> 即会出现连接。</div>'; return; }
-    $('live').innerHTML='<b>出口节点：</b><code>'+esc(j.node||'未知')+'</code>　<b>活动连接：</b>'+j.conns+rate;
+    $('live').innerHTML='<b>出口节点：</b><code>'+esc(j.node||'未知')+'</code>'+dl
+      +'　<b>活动连接：</b>'+j.conns+rate;
   }).catch(()=>{ $('live').textContent='状态获取失败'; });
 }
 setInterval(()=>{ if(document.querySelector('.tab.on').dataset.p==='ov') pollLive(); },2000);

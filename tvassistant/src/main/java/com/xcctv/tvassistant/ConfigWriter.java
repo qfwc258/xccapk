@@ -267,8 +267,9 @@ public final class ConfigWriter {
         b.append("    use:\n");
         b.append("      - SUB\n");
         b.append("    url: https://www.gstatic.com/generate_204\n");
-        b.append("    interval: 300\n");
+        b.append("    interval: 120\n");
         b.append("    tolerance: 50\n");
+        b.append("    lazy: false\n");
         b.append("  - name: PROXY\n");
         b.append("    type: select\n");
         b.append("    proxies:\n");

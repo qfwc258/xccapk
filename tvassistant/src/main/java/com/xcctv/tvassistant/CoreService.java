@@ -89,8 +89,8 @@ public class CoreService extends Service implements WebServer.Control {
         if (line.length() == 0) {
             return;
         }
-        if (line.length() > 160) {
-            line = line.substring(0, 160) + "…";
+        if (line.length() > 500) {
+            line = line.substring(0, 500) + "…";
         }
         synchronized (LOCK) {
             LOG.addLast(line);
@@ -312,6 +312,12 @@ public class CoreService extends Service implements WebServer.Control {
                     String l;
                     while ((l = r.readLine()) != null) {
                         log(l);
+                        // 订阅里的 VMess 节点若服务端开了「动态端口」，mihomo 不支持
+                        //（transport/vmess: "dynamic port is not supported now"），
+                        // 且 url-test 不会因拨号失败立即换节点 —— 这里自动整组重测把它淘汰。
+                        if (l.contains("dynamic port is not supported")) {
+                            retestGroup("订阅 VMess 节点开了动态端口（内核不支持，连接必失败）");
+                        }
                     }
                 } catch (Exception ignored) {
                 }
@@ -406,6 +412,57 @@ public class CoreService extends Service implements WebServer.Control {
             return null;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /** 最近一次自动重测时间戳（防抖：60 秒内只触发一次） */
+    private static volatile long lastRetest = 0;
+
+    /**
+     * 整组重测「自动选择」：调内核 /group/自动选择/delay，
+     * 重测后 url-test 按最新延迟改选最快**可用**节点，坏节点（如动态端口 VMess）自动淘汰。
+     */
+    private void retestGroup(String reason) {
+        long now = System.currentTimeMillis();
+        if (now - lastRetest < 60_000) {
+            return;
+        }
+        lastRetest = now;
+        log("⚠ " + reason);
+        log("→ 正在整组重测，自动切换到可用节点…");
+        String secret = Prefs.get(this)
+                .getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
+        String path = "/group/" + enc("自动选择")
+                + "/delay?url=" + enc("https://www.gstatic.com/generate_204")
+                + "&timeout=5000";
+        String r = Net.ctrlGet(path, secret, 20000);
+        if (r == null) {
+            log("✗ 重测无应答（内核忙或已退出），可在网页概览点「重测节点」再试");
+            return;
+        }
+        String cur = currentGroupNode(secret);
+        log("✓ 重测完成，自动选择 → " + (cur == null || cur.isEmpty() ? "未知" : cur));
+        refreshNotification();
+    }
+
+    /** 读「自动选择」组当前实际选中的节点 */
+    private static String currentGroupNode(String secret) {
+        String g = Net.ctrlGet("/proxies/" + enc("自动选择"), secret, 3000);
+        if (g == null) {
+            return null;
+        }
+        try {
+            return new org.json.JSONObject(g).optString("now", null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String enc(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, "UTF-8");
+        } catch (Exception e) {
+            return s;
         }
     }
 

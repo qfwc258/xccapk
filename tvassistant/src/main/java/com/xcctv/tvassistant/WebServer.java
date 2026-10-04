@@ -211,6 +211,8 @@ public class WebServer {
                 sendJson(s, apiProxyTest());
             } else if (path.startsWith("/api/live")) {
                 sendJson(s, apiLive());
+            } else if (path.startsWith("/api/regroup")) {
+                sendJson(s, apiRegroup());
             } else if (path.startsWith("/api/pass/set")) {
                 sendJson(s, apiPassSet(body));
             } else if (path.startsWith("/api/pass/off")) {
@@ -455,16 +457,31 @@ public class WebServer {
     }
 
     /**
-     * 实时连接状态：转发内核 :9090/connections，聚合为 当前出口节点/活动连接数/累计上下行。
+     * 实时连接状态：聚合内核 /proxies/自动选择（当前节点）与 /connections（连接数/流量）。
      * 速率由前端按两次轮询差值计算。
      */
     private String apiLive() {
         String secret = Prefs.get(ctx).getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
-        String body = ctrlGet("/connections", secret);
         long up = 0, down = 0;
-        int conns = 0;
+        int conns = 0, delay = 0;
         String node = "";
-        java.util.HashMap<String, Integer> cnt = new java.util.HashMap<String, Integer>();
+
+        // 1) 组当前节点（最准）
+        String g = Net.ctrlGet("/proxies/" + enc("自动选择"), secret, 3000);
+        if (g != null) {
+            try {
+                JSONObject o = new JSONObject(g);
+                node = o.optString("now", "");
+                JSONArray hist = o.optJSONArray("history");
+                if (hist != null && hist.length() > 0) {
+                    delay = hist.getJSONObject(hist.length() - 1).optInt("delay", 0);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // 2) 连接数与累计流量
+        String body = ctrlGet("/connections", secret);
         if (body != null) {
             try {
                 JSONObject o = new JSONObject(body);
@@ -472,29 +489,32 @@ public class WebServer {
                 down = o.optLong("downloadTotal", 0);
                 JSONArray cs = o.optJSONArray("connections");
                 conns = cs == null ? 0 : cs.length();
-                for (int i = 0; i < conns; i++) {
-                    JSONObject c = cs.optJSONObject(i);
-                    if (c == null) {
-                        continue;
-                    }
-                    JSONArray chain = c.optJSONArray("chains");
-                    if (chain == null) {
-                        continue;
-                    }
-                    for (int k = 0; k < chain.length(); k++) {
-                        String seg = chain.optString(k, "");
-                        if (seg.length() > 0 && !"PROXY".equals(seg) && !"自动选择".equals(seg)) {
-                            Integer v = cnt.get(seg);
-                            cnt.put(seg, v == null ? 1 : v + 1);
-                            break;
+                if ((node == null || node.isEmpty()) && conns > 0) {
+                    java.util.HashMap<String, Integer> cnt = new java.util.HashMap<String, Integer>();
+                    for (int i = 0; i < conns; i++) {
+                        JSONObject c = cs.optJSONObject(i);
+                        if (c == null) {
+                            continue;
+                        }
+                        JSONArray chain = c.optJSONArray("chains");
+                        if (chain == null) {
+                            continue;
+                        }
+                        for (int k = 0; k < chain.length(); k++) {
+                            String seg = chain.optString(k, "");
+                            if (seg.length() > 0 && !"PROXY".equals(seg) && !"自动选择".equals(seg)) {
+                                Integer v = cnt.get(seg);
+                                cnt.put(seg, v == null ? 1 : v + 1);
+                                break;
+                            }
                         }
                     }
-                }
-                int best = 0;
-                for (Map.Entry<String, Integer> e : cnt.entrySet()) {
-                    if (e.getValue() > best) {
-                        best = e.getValue();
-                        node = e.getKey();
+                    int best = 0;
+                    for (Map.Entry<String, Integer> e : cnt.entrySet()) {
+                        if (e.getValue() > best) {
+                            best = e.getValue();
+                            node = e.getKey();
+                        }
                     }
                 }
             } catch (Exception ignored) {
@@ -503,7 +523,54 @@ public class WebServer {
         return "{\"ok\":true,\"running\":" + hub.isProxyRunning()
                 + ",\"conns\":" + conns
                 + ",\"up\":" + up + ",\"down\":" + down
-                + ",\"node\":\"" + esc(node) + "\"}";
+                + ",\"delay\":" + delay
+                + ",\"node\":\"" + esc(node == null ? "" : node) + "\"}";
+    }
+
+    /** 手动触发「自动选择」整组重测：坏节点测速失败被淘汰，url-test 改选最快可用节点 */
+    private String apiRegroup() {
+        if (!hub.isProxyRunning()) {
+            return json(false, "代理未启动");
+        }
+        String secret = Prefs.get(ctx).getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
+        String r = Net.ctrlGet("/group/" + enc("自动选择")
+                + "/delay?url=" + enc("https://www.gstatic.com/generate_204")
+                + "&timeout=5000", secret, 20000);
+        if (r == null) {
+            return json(false, "重测无应答（内核可能未就绪），稍后再试");
+        }
+        String node = "";
+        int best = Integer.MAX_VALUE;
+        int okCnt = 0;
+        try {
+            JSONObject o = new JSONObject(r);
+            java.util.Iterator<String> it = o.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                int d = o.optInt(k, 0);
+                if (d > 0) {
+                    okCnt++;
+                    if (d < best) {
+                        best = d;
+                        node = k;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (okCnt == 0) {
+            return json(false, "重测完成：无任何节点可用（订阅可能已失效，请更新订阅）");
+        }
+        return json(true, "重测完成：" + okCnt + " 个节点可用，最快「" + node + "」"
+                + (best < Integer.MAX_VALUE ? " " + best + "ms" : "") + "，已自动切换");
+    }
+
+    private static String enc(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, "UTF-8");
+        } catch (Exception e) {
+            return s;
+        }
     }
 
     /** 内核控制接口原始 GET，返回 body 或 null */

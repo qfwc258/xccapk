@@ -59,4 +59,44 @@ public final class Net {
             }
         }
     }
+
+    /** 调内核 external-controller 的 GET 接口，返回 body（已去掉 HTTP 头）或 null */
+    public static String ctrlGet(String path, String secret, int readTimeoutMs) {
+        Socket s = new Socket();
+        try {
+            s.connect(new InetSocketAddress("127.0.0.1", ConfigWriter.CTRL_PORT), 800);
+            s.setSoTimeout(readTimeoutMs);
+            java.io.OutputStream os = s.getOutputStream();
+            String req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    + "Authorization: Bearer " + (secret == null ? "" : secret) + "\r\n"
+                    + "Connection: close\r\n\r\n";
+            os.write(req.getBytes("UTF-8"));
+            os.flush();
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(s.getInputStream(), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String l;
+            boolean headDone = false;
+            while ((l = r.readLine()) != null) {
+                if (!headDone) {
+                    if (l.isEmpty()) {
+                        headDone = true;
+                    }
+                    continue;
+                }
+                sb.append(l).append('\n');
+                if (sb.length() > 4 * 1024 * 1024) {
+                    break;
+                }
+            }
+            return sb.length() > 0 ? sb.toString() : null;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            try {
+                s.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
 }
