@@ -1,5 +1,6 @@
 {"urls": [
 {"name": "盒子迷", "url": "https://盒子迷.top/禁止贩卖"},
+{"name": "http", "url": "http://192.168.2.2:8080"},
 {"name": "本地vod（影视)", "url": "file://xcctv/vod.json"},
 {"name": "本地vod（tvbox)", "url": "clan://localhost/xcctv/vod.json"},
 {"name": "本地jsm（tvbox)", "url": "clan://localhost/xcctv/jsm.json"},
