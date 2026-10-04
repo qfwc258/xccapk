@@ -10,6 +10,24 @@ import java.util.Enumeration;
 
 public final class Net {
 
+    /** 内核 API 调用失败日志钩子（CoreService 启动时挂接，避免静默失败） */
+    public static interface Logger {
+        void log(String s);
+    }
+
+    private static volatile Logger logger;
+
+    public static void setLogger(Logger l) {
+        logger = l;
+    }
+
+    private static void logFail(String what, Exception e) {
+        Logger l = logger;
+        if (l != null) {
+            l.log("⚠ 内核API " + what + " 失败: " + e);
+        }
+    }
+
     private Net() {
     }
 
@@ -65,17 +83,19 @@ public final class Net {
      *  手写 Socket 解析会把 chunk 长度行混进 JSON 导致解析失败（v1.6 及之前自愈失效的根源）。 */
     public static String ctrlGet(String path, String secret, int readTimeoutMs) {
         try {
+            // NO_PROXY：本机管理 API 绝不允许被系统代理（如 WiFi 手动代理）劫持
             java.net.HttpURLConnection c = (java.net.HttpURLConnection)
                     new java.net.URL("http://127.0.0.1:" + ConfigWriter.CTRL_PORT + path)
-                            .openConnection();
+                            .openConnection(java.net.Proxy.NO_PROXY);
             c.setConnectTimeout(1200);
             c.setReadTimeout(readTimeoutMs);
             c.setRequestProperty("Authorization", "Bearer " + (secret == null ? "" : secret));
             int code = c.getResponseCode();
-            java.io.InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
-            if (in == null) {
+            if (code >= 400) {
+                logFail("GET " + path + " -> HTTP " + code, null);
                 return null;
             }
+            java.io.InputStream in = c.getInputStream();
             java.io.BufferedReader r = new java.io.BufferedReader(
                     new java.io.InputStreamReader(in, "UTF-8"));
             StringBuilder sb = new StringBuilder();
@@ -85,8 +105,9 @@ public final class Net {
                 sb.append(buf, 0, n);
             }
             r.close();
-            return code < 400 && sb.length() > 0 ? sb.toString() : null;
+            return sb.length() > 0 ? sb.toString() : null;
         } catch (Exception e) {
+            logFail("GET " + path, e);
             return null;
         }
     }
@@ -96,7 +117,7 @@ public final class Net {
         try {
             java.net.HttpURLConnection c = (java.net.HttpURLConnection)
                     new java.net.URL("http://127.0.0.1:" + ConfigWriter.CTRL_PORT + path)
-                            .openConnection();
+                            .openConnection(java.net.Proxy.NO_PROXY);
             c.setConnectTimeout(1200);
             c.setReadTimeout(readTimeoutMs);
             c.setRequestMethod("PUT");
@@ -109,8 +130,13 @@ public final class Net {
             os.write(b);
             os.flush();
             os.close();
-            return c.getResponseCode();
+            int code = c.getResponseCode();
+            if (code >= 400) {
+                logFail("PUT " + path + " -> HTTP " + code, null);
+            }
+            return code;
         } catch (Exception e) {
+            logFail("PUT " + path, e);
             return -1;
         }
     }

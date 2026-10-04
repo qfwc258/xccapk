@@ -11,8 +11,8 @@ android {
         applicationId "com.xcctv.tvassistant"
         minSdk 21
         targetSdk 34
-        versionCode 8
-        versionName "1.7"
+        versionCode 9
+        versionName "1.8"
         ndk {
             // 真实电视/盒子都是 ARM；x86_64 仅用于模拟器调试（默认不打包）
             abiFilters 'arm64-v8a', 'armeabi-v7a'

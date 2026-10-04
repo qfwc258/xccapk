@@ -16,6 +16,8 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -111,6 +113,13 @@ public class CoreService extends Service implements WebServer.Control {
     public void onCreate() {
         super.onCreate();
         createChannel();
+        // 内核 API 失败原因直接进内核日志（此前失败全被静默吞掉，排查极难）
+        Net.setLogger(new Net.Logger() {
+            @Override
+            public void log(String s) {
+                CoreService.log(s);
+            }
+        });
         ConfigWriter.ensureUi(this);
         web = new WebServer(this, this);
         web.start();
@@ -263,6 +272,10 @@ public class CoreService extends Service implements WebServer.Control {
         }
         b.setExecutable(true, false);
 
+        // 防孤儿：覆盖安装/服务重启后，上一个内核子进程可能存活并占着 9090/7890，
+        // 导致新内核 controller 绑定失败(仅记 error 继续跑)——API 全部无应答。
+        killOrphanCore();
+
         // 端口预检：被其它进程（比如旧版 mihomotv 还在跑）占用时，内核会起不来
         if (Net.portOpen("127.0.0.1", ConfigWriter.MIXED_PORT)) {
             log("⚠ 端口 " + ConfigWriter.MIXED_PORT + " 已被占用——若装过旧版 mihomotv 请先停用/卸载它");
@@ -366,23 +379,27 @@ public class CoreService extends Service implements WebServer.Control {
         waiter.setDaemon(true);
         waiter.start();
 
-        // 启动自检：2.5 秒后还活着，再探测 external-controller 是否应答
+        // 启动自检：2.5s / 6s / 12s 三次探测 external-controller 应答
         Thread probe = new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    Thread.sleep(2500);
-                } catch (Exception ignored) {
-                }
-                if (!running || p != proc) {
-                    return;
-                }
-                if (!p.isAlive()) {
-                    return;
-                }
                 String secret = Prefs.get(CoreService.this)
                         .getString(Prefs.K_SECRET, ConfigWriter.DEFAULT_SECRET);
-                String ver = ctrlVersion(secret);
+                long[] waits = {2500, 3500, 6000};
+                String ver = null;
+                for (long w : waits) {
+                    try {
+                        Thread.sleep(w);
+                    } catch (Exception ignored) {
+                    }
+                    if (!running || p != proc || !p.isAlive()) {
+                        return;
+                    }
+                    ver = ctrlVersion(secret);
+                    if (ver != null) {
+                        break;
+                    }
+                }
                 if (ver != null) {
                     log("✓ 内核就绪，控制接口应答 " + ver);
                     // cache.db 的 store-selected 可能把 PROXY 恢复到旧坏节点 —— 启动即自愈
@@ -393,7 +410,12 @@ public class CoreService extends Service implements WebServer.Control {
                                 + (node == null || node.isEmpty() ? "（测速中）" : node));
                     }
                 } else {
-                    log("内核进程存活，但 " + ConfigWriter.CTRL_PORT + " 端口尚未应答（可能在拉取订阅）");
+                    log("✗ 内核进程存活，但控制接口 :9090 始终无应答");
+                    if (Net.portOpen("127.0.0.1", ConfigWriter.CTRL_PORT)) {
+                        log("　:9090 端口有监听但不答——多半是旧内核孤儿进程占用（本进程的 controller 绑定失败）");
+                    } else {
+                        log("　:9090 无监听——内核 controller 启动失败，请查看上方内核输出中的 listen error");
+                    }
                 }
                 refreshNotification();
             }
@@ -420,6 +442,69 @@ public class CoreService extends Service implements WebServer.Control {
 
     /** 最近一次自动重测时间戳（防抖：60 秒内只触发一次） */
     private static volatile long lastRetest = 0;
+
+    /**
+     * 杀掉遗留的内核孤儿进程。场景：覆盖安装/系统回收把 App 进程杀掉时
+     * onDestroy 不执行，mihomo 子进程变成孤儿继续占 7890/9090 —— 新内核的
+     * controller 绑定失败（内核只记 error 继续跑），API 从此全部无应答。
+     * 调用时机：启动新内核前（此时本实例内核必然已停，不会误杀）。
+     */
+    private static void killOrphanCore() {
+        try {
+            File[] pids = new File("/proc").listFiles();
+            if (pids == null) {
+                return;
+            }
+            int me = android.os.Process.myPid();
+            int killed = 0;
+            for (File f : pids) {
+                String name = f.getName();
+                if (!name.matches("[0-9]+")) {
+                    continue;
+                }
+                int pid;
+                try {
+                    pid = Integer.parseInt(name);
+                } catch (Exception e) {
+                    continue;
+                }
+                if (pid == me) {
+                    continue;
+                }
+                File cmdFile = new File(f, "cmdline");
+                if (!cmdFile.canRead()) {
+                    continue;
+                }
+                StringBuilder sb = new StringBuilder();
+                try {
+                    InputStream in = new FileInputStream(cmdFile);
+                    byte[] b = new byte[512];
+                    int n = in.read(b);
+                    in.close();
+                    for (int i = 0; i < n; i++) {
+                        sb.append(b[i] == 0 ? ' ' : (char) b[i]);
+                    }
+                } catch (Exception ignored) {
+                    continue;
+                }
+                if (sb.toString().contains("libmihomo.so")) {
+                    try {
+                        android.os.Process.killProcess(pid);
+                        killed++;
+                        log("清理遗留内核进程 pid=" + pid);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+            if (killed > 0) {
+                try {
+                    Thread.sleep(600);
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
 
     /** 连续出站拨号失败计数（reader 线程维护） */
     private static volatile int dialErrStreak = 0;
