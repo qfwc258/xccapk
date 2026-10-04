@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Mihomo TV</string>
     <string name="hint_sub">订阅地址（http/https）或整段 config.yaml</string>
+    <string name="hint_secret">控制面板密钥（默认 zakamihomo）</string>
     <string name="cb_lan">允许局域网（同 WiFi 其它设备可用）</string>
     <string name="cb_boot">开机自动启动</string>
     <string name="btn_start">启动</string>

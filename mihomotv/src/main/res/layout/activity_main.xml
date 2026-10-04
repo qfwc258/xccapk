@@ -29,6 +29,20 @@
         android:background="#1c2330"
         android:padding="12dp" />
 
+    <EditText
+        android:id="@+id/etSecret"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:layout_marginTop="12dp"
+        android:textSize="16sp"
+        android:hint="@string/hint_secret"
+        android:textColor="#ffffff"
+        android:textColorHint="#7a8694"
+        android:inputType="textVisiblePassword"
+        android:background="#1c2330"
+        android:padding="12dp" />
+
     <CheckBox
         android:id="@+id/cbLan"
         android:layout_width="wrap_content"

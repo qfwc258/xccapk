@@ -1,12 +1,16 @@
 package com.zaka.mihomotv;
 
 import android.content.Context;
+import android.util.Log;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.URLDecoder;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 /**
  * 生成 mihomo 的 config.yaml。
@@ -18,7 +22,8 @@ public final class ConfigWriter {
 
     public static final int MIXED_PORT = 7890;
     public static final int CTRL_PORT = 9090;
-    public static final String CTRL_SECRET = "zakamihomo";
+    public static final int PANEL_PORT = 9091;
+    public static final String DEFAULT_SECRET = "zakamihomo";
 
     /** 这些顶层键由本程序接管：原配置里出现的整块丢掉，换成我们生成的。 */
     private static final String[] MANAGED = {
@@ -41,6 +46,44 @@ public final class ConfigWriter {
 
     public static File configFile(Context c) {
         return new File(workDir(c), "config.yaml");
+    }
+
+    /** 仪表盘目录（external-ui 指向这里，相对内核工作目录即为 ./yacd） */
+    public static File uiDir(Context c) {
+        return new File(workDir(c), "yacd");
+    }
+
+    /** 首次运行把内置的 YACD 仪表盘（assets/yacd.zip）解压到 uiDir；已存在则跳过 */
+    public static void ensureUi(Context c) {
+        File dir = uiDir(c);
+        if (new File(dir, "index.html").exists()) {
+            return;
+        }
+        dir.mkdirs();
+        try (ZipInputStream zis = new ZipInputStream(c.getAssets().open("yacd.zip"))) {
+            ZipEntry e;
+            while ((e = zis.getNextEntry()) != null) {
+                if (e.isDirectory()) {
+                    continue;
+                }
+                File out = new File(dir, e.getName());
+                File p = out.getParentFile();
+                if (p != null) {
+                    p.mkdirs();
+                }
+                try (FileOutputStream fos = new FileOutputStream(out)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = zis.read(buf)) > 0) {
+                        fos.write(buf, 0, n);
+                    }
+                }
+                zis.closeEntry();
+            }
+            Log.i("MihomoTV", "yacd 仪表盘已解压到 " + dir);
+        } catch (IOException ex) {
+            Log.w("MihomoTV", "解压 yacd 失败: " + ex);
+        }
     }
 
     /** 支持 clash://install-config?url=... 这种分享格式 */
@@ -78,30 +121,34 @@ public final class ConfigWriter {
     }
 
     /** 顶层公共设置：本机 + 局域网代理都靠这几行 */
-    private static String head(boolean lan) {
+    private static String head(boolean lan, String secret) {
+        if (secret == null || secret.isEmpty()) {
+            secret = DEFAULT_SECRET;
+        }
         StringBuilder b = new StringBuilder();
         b.append("mixed-port: ").append(MIXED_PORT).append('\n');
         b.append("allow-lan: ").append(lan).append('\n');
         b.append("bind-address: '*'\n");
         b.append("log-level: info\n");
         b.append("external-controller: 0.0.0.0:").append(CTRL_PORT).append('\n');
-        b.append("secret: ").append(CTRL_SECRET).append('\n');
+        b.append("secret: ").append(secret).append('\n');
+        b.append("external-ui: ./yacd\n");
         return b.toString();
     }
 
     /** 生成可直接写给内核的完整配置 */
-    public static String build(String input, boolean lan) {
+    public static String build(String input, boolean lan, String secret) {
         String s = normalize(input);
         if (isUrl(s)) {
-            return subscription(s, lan);
+            return subscription(s, lan, secret);
         }
-        return mergeWithYaml(s, lan);
+        return mergeWithYaml(s, lan, secret);
     }
 
-    private static String subscription(String url, boolean lan) {
+    private static String subscription(String url, boolean lan, String secret) {
         StringBuilder b = new StringBuilder();
         b.append("# Mihomo TV - 订阅模式 - 自动生成，改这个文件没用，改了会被覆盖\n");
-        b.append(head(lan));
+        b.append(head(lan, secret));
         b.append("mode: rule\n");
         b.append("ipv6: false\n");
         b.append("unified-delay: true\n");
@@ -170,10 +217,10 @@ public final class ConfigWriter {
      * 用户直接贴了完整 config.yaml：保留他的 proxies / proxy-groups / rules / dns，
      * 只把被接管的顶层键（端口、allow-lan 等）摘掉，换成我们的，避免 YAML 重复键。
      */
-    private static String mergeWithYaml(String yaml, boolean lan) {
+    private static String mergeWithYaml(String yaml, boolean lan, String secret) {
         StringBuilder out = new StringBuilder();
         out.append("# Mihomo TV - 自定义配置模式\n");
-        out.append(head(lan));
+        out.append(head(lan, secret));
         String[] lines = yaml.split("\n", -1);
         boolean skipping = false;
         for (int i = 0; i < lines.length; i++) {

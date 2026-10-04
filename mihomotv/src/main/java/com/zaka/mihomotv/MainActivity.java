@@ -21,8 +21,10 @@ public class MainActivity extends Activity {
     public static final String K_SUB = "sub";
     public static final String K_LAN = "lan";
     public static final String K_BOOT = "boot";
+    public static final String K_SECRET = "secret";
 
     private EditText etSub;
+    private EditText etSecret;
     private CheckBox cbLan;
     private CheckBox cbBoot;
     private TextView tvStatus;
@@ -45,6 +47,7 @@ public class MainActivity extends Activity {
         sp = getSharedPreferences(PREF, MODE_PRIVATE);
 
         etSub = (EditText) findViewById(R.id.etSub);
+        etSecret = (EditText) findViewById(R.id.etSecret);
         cbLan = (CheckBox) findViewById(R.id.cbLan);
         cbBoot = (CheckBox) findViewById(R.id.cbBoot);
         tvStatus = (TextView) findViewById(R.id.tvStatus);
@@ -52,6 +55,7 @@ public class MainActivity extends Activity {
         Button btnStop = (Button) findViewById(R.id.btnStop);
 
         etSub.setText(sp.getString(K_SUB, ""));
+        etSecret.setText(sp.getString(K_SECRET, ConfigWriter.DEFAULT_SECRET));
         cbLan.setChecked(sp.getBoolean(K_LAN, true));
         cbBoot.setChecked(sp.getBoolean(K_BOOT, true));
 
@@ -111,6 +115,10 @@ public class MainActivity extends Activity {
     /** 保存 + （重新）启动核核心 */
     private void apply(boolean loud) {
         String input = ConfigWriter.normalize(etSub.getText().toString());
+        String secret = etSecret.getText().toString().trim();
+        if (secret.isEmpty()) {
+            secret = ConfigWriter.DEFAULT_SECRET;
+        }
         if (input.length() == 0) {
             if (loud) {
                 toast("先填订阅地址，或整段 config.yaml 贴进来");
@@ -123,7 +131,7 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        String yaml = ConfigWriter.build(input, cbLan.isChecked());
+        String yaml = ConfigWriter.build(input, cbLan.isChecked(), secret);
         String err = ConfigWriter.write(this, yaml);
         if (err != null) {
             if (loud) {
@@ -133,6 +141,7 @@ public class MainActivity extends Activity {
         }
         sp.edit()
                 .putString(K_SUB, input)
+                .putString(K_SECRET, secret)
                 .putBoolean(K_LAN, cbLan.isChecked())
                 .apply();
 
@@ -152,6 +161,7 @@ public class MainActivity extends Activity {
         boolean alive = MihomoService.isRunning();
         boolean port = Net.portOpen("127.0.0.1", ConfigWriter.MIXED_PORT);
         String ip = Net.lanIp();
+        String secret = sp.getString(K_SECRET, ConfigWriter.DEFAULT_SECRET);
 
         StringBuilder b = new StringBuilder();
         if (!alive) {
@@ -168,8 +178,10 @@ public class MainActivity extends Activity {
         } else {
             b.append("局域网 已关闭\n");
         }
-        b.append("面板   http://").append(ip).append(':').append(ConfigWriter.CTRL_PORT)
-                .append("  密钥 ").append(ConfigWriter.CTRL_SECRET).append('\n');
+        b.append("仪表盘 http://").append(ip).append(':').append(ConfigWriter.CTRL_PORT)
+                .append("/ui/  密钥 ").append(secret).append('\n');
+        b.append("管理端 http://").append(ip).append(':').append(ConfigWriter.PANEL_PORT)
+                .append("/  (可改订阅/密钥)\n");
         b.append("──────────── 日志 ────────────\n");
         String tail = MihomoService.tail(7);
         b.append(tail.length() == 0 ? "(空)\n" : tail);

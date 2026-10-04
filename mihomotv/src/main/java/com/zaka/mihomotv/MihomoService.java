@@ -41,6 +41,7 @@ public class MihomoService extends Service {
     private PowerManager.WakeLock wake;
     private Thread reader;
     private Thread waiter;
+    private PanelServer panel;
 
     public static boolean isRunning() {
         return running;
@@ -96,6 +97,9 @@ public class MihomoService extends Service {
     public void onCreate() {
         super.onCreate();
         createChannel();
+        // 管理面板随服务存活（默认开即启动，面板始终可达）
+        panel = new PanelServer(this);
+        panel.start();
     }
 
     @Override
@@ -122,6 +126,9 @@ public class MihomoService extends Service {
 
     @Override
     public void onDestroy() {
+        if (panel != null) {
+            panel.stop();
+        }
         stopCore();
         super.onDestroy();
     }
@@ -132,6 +139,7 @@ public class MihomoService extends Service {
         if (proc != null) {
             return;
         }
+        ConfigWriter.ensureUi(this);
         File cfg = ConfigWriter.configFile(this);
         if (!cfg.exists() || cfg.length() == 0) {
             log("没有配置文件，先在界面上填订阅并保存");
@@ -291,7 +299,10 @@ public class MihomoService extends Service {
                 new Intent(this, MihomoService.class).setAction(ACTION_STOP), piFlag);
 
         String ip = Net.lanIp();
-        String text = "本机 " + ip + ":" + ConfigWriter.MIXED_PORT + " · 局域网同地址";
+        String title = running ? "Mihomo 代理运行中" : "Mihomo 面板已就绪";
+        String text = running
+                ? "本机 " + ip + ":" + ConfigWriter.MIXED_PORT + " · 局域网同地址"
+                : "管理面板 http://" + ip + ":" + ConfigWriter.PANEL_PORT;
 
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
@@ -300,7 +311,7 @@ public class MihomoService extends Service {
             b = new Notification.Builder(this);
         }
         b.setSmallIcon(R.drawable.ic_stat)
-                .setContentTitle("Mihomo 代理运行中")
+                .setContentTitle(title)
                 .setContentText(text)
                 .setOngoing(true)
                 .setShowWhen(false)
