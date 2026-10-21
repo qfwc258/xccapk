@@ -1,5 +1,5 @@
 {
-  "spider": "./jar/spider.jar;md5;bbb5214a2ba3724821c5f8d2db5071dc",
+  "spider": "./jar/spider.jar;md5;4a35e9a49f5872ea0a4358e5424e657a",
   "lives": [
     {
       "name": "live",
@@ -684,16 +684,6 @@
       "timeout": 60
     },
     {
-      "key": "人人",
-      "name": "人人 • 4K",
-      "type": 3,
-      "api": "csp_RenRen",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "timeout": 60
-    },
-    {
       "key": "即刻",
       "name": "即刻 • 4K",
       "type": 3,
@@ -731,6 +721,13 @@
         "type": "list"
       },
       "timeout": 60
+    },
+    {
+      "key": "红果短剧",
+      "name": "红果 • 短剧",
+      "type": 3,
+      "api": "./py/红果短剧.py",
+      "genre": "shortdrama"
     },
     {
       "key": "七猫短剧",
